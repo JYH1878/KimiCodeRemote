@@ -1,0 +1,11 @@
+node_modules/
+dist/
+bin/
+*.log
+.kimi-remote.json
+.DS_Store
+.mimosa/.mimosa/
+.mimosa/finding-ledger/
+.mimosa/hook-state/
+.mimosa/hook-status/
+packages/*/.mimosa/

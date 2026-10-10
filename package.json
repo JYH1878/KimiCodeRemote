@@ -1,0 +1,23 @@
+{
+  "name": "kimi-remote",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Mobile remote control for Kimi Code desktop over an end-to-end-encrypted relay bridge",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace packages/bridge && npm run build --workspace packages/pwa",
+    "start": "node packages/bridge/dist/cli.js",
+    "dev": "node scripts/dev.mjs",
+    "dev:bridge": "npm run build --workspace packages/bridge --silent && node packages/bridge/dist/cli.js --no-tunnel",
+    "dev:pwa": "npm run dev --workspace packages/pwa --silent",
+    "verify:discovery": "node packages/bridge/dist/verify/discovery.js",
+    "verify:e2e": "node packages/bridge/dist/verify/e2e.js",
+    "verify:ws": "node packages/bridge/dist/verify/ws.js",
+    "verify:tunnel": "node packages/bridge/dist/verify/tunnel.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
