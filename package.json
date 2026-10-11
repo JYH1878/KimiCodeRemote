@@ -8,6 +8,7 @@
   ],
   "scripts": {
     "build": "npm run build --workspace packages/bridge && npm run build --workspace packages/pwa",
+    "build:exe": "npm run build && node scripts/build-exe.mjs",
     "start": "node packages/bridge/dist/cli.js",
     "start:bg": "node scripts/start-bg.mjs",
     "stop": "node scripts/stop.mjs",
@@ -24,5 +25,8 @@
   },
   "engines": {
     "node": ">=20"
+  },
+  "devDependencies": {
+    "postject": "^1.0.0-alpha.6"
   }
 }
