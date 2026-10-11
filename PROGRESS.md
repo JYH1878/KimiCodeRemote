@@ -140,3 +140,14 @@
 2. `verify:tunnel` 首跑 FAIL（新 quick tunnel 30 次重试不可达）——**已知环境干扰复现**（本机 DNS 间歇劣化，见 §公网隧道实测证据）；同期主隧道公网 healthz 200，单独重跑 verify:tunnel ✅ exit 0（12 次重试后通）。与本次改动无关（bridge 零改动）。
 3. 视觉自查（桌面浏览器 390×844 移动视口，本地 7777）：列表页工作区卡片/副行/状态胶囊/发丝线 ✓；聊天页 skill 细条默认收起+点击展开（args+摘要）✓、用户原话右侧深色卡片 ✓、injection/task 不可见 ✓、助手全宽平铺+thinking/工具折叠 ✓、顶栏/输入条/审批配色 ✓、无绿色残留 ✓。
 4. 遗留：管理者手机视口终验（完成条件 2）。
+
+### 12. 热修：微信内手机返回直接退出网页（2026-10-11，领导实测反馈）
+
+**原因**：SPA 无路由，「列表→会话」只是 `Shell.tsx` 的 React state 切换，浏览器历史栈始终只有一条记录；手机返回键/微信左滑手势 = 浏览器后退，无处可退 → webview 直接关闭。
+
+**修复（只动 `Shell.tsx`）**
+- `openSession` 时 `history.pushState({view:'session',id,title}, '')` 压栈（**URL 不变**，不碰 `#k=` 钥匙 fragment——钥匙早已入 localStorage）。
+- `popstate` 监听按 `event.state` 分流：`view:'session'` → 恢复该会话（**前进方向也要正确**——首版无脑回列表被实测抓出：go_forward 后详情页丢成列表）；否则回列表。
+- 界面「‹ 返回」按钮改走 `history.back()`（state 匹配时）保持栈一致，失配兜底直接 setOpenId(null)。
+
+**实测闭环（桌面浏览器 390×844）**：进会话（canGoBack:true）→ go_back 回列表（栈底，再退才退出）→ go_forward 正确恢复同一会话 → 界面「‹ 返回」回列表 ✓。回归：build ✅、verify:pwa ✅、verify:ux ✅。
