@@ -8,6 +8,7 @@
 import http from 'node:http';
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import { extname, join, sep } from 'node:path';
+import * as sea from 'node:sea';
 import type { AddressInfo } from 'node:net';
 import { WebSocketServer } from 'ws';
 import { openEnvelope, seal, loadOrCreateKey } from './crypto.js';
@@ -17,7 +18,7 @@ import { isAllowed } from './allowlist.js';
 import { splitPath, upstreamRequest } from './upstream.js';
 import { WsBridge } from './wsbridge.js';
 import { ensureCloudflared, loadNamedTunnelConfig, startTunnel, stopTunnel } from './tunnel.js';
-import { CLOUDFLARED_BIN, MAX_BOX_BODY, PWA_DIST } from './config.js';
+import { CLOUDFLARED_BIN, MAX_BOX_BODY, PWA_DIST, SEA_MODE } from './config.js';
 
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -209,6 +210,27 @@ async function handleBox(
 }
 
 function serveStatic(path: string, res: http.ServerResponse): boolean {
+  if (SEA_MODE) {
+    // Single-executable build: the PWA is embedded as SEA assets (embedded
+    // at build time from packages/pwa/dist). Same defense posture as below -
+    // traversal rejected, only index.html and assets/* exist.
+    const rel = path === '/' ? 'index.html' : decodeURIComponent(path.slice(1));
+    if (rel.includes('..') || rel.includes('\\') || rel.startsWith('.')) return false;
+    if (rel !== 'index.html' && !rel.startsWith('assets/')) return false;
+    let body: Buffer;
+    try {
+      body = Buffer.from(sea.getAsset(rel));
+    } catch {
+      return false; // not an embedded asset
+    }
+    res.writeHead(200, {
+      'content-type': MIME[extname(rel).toLowerCase()] ?? 'application/octet-stream',
+      'content-length': body.length,
+      'cache-control': rel.startsWith('assets/') ? 'public, max-age=604800' : 'no-cache',
+    });
+    res.end(body);
+    return true;
+  }
   if (!existsSync(PWA_DIST)) {
     json(res, 404, { error: 'pwa not built - run: npm run build' });
     return true;
