@@ -185,7 +185,75 @@ button {
   padding: 10px 12px calc(16px + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
+  gap: 12px;
+}
+
+.ws-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ws-group-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ws-group-toggle {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
   gap: 8px;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  padding: 4px 2px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 15px;
+  text-align: left;
+}
+
+.ws-group-toggle .chevron {
+  color: var(--muted);
+  font-size: 12px;
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+
+.ws-group-toggle .chevron.closed {
+  transform: rotate(-90deg);
+}
+
+.ws-group-toggle .ws-name {
+  flex: 1;
+}
+
+.ws-group-toggle .ws-count {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+  background: var(--panel-2);
+  border-radius: 999px;
+  padding: 1px 8px;
+  flex-shrink: 0;
+}
+
+.btn.icon {
+  padding: 4px 12px;
+  border-radius: 8px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.ws-cwd {
+  color: var(--muted);
+  font-size: 11px;
+  padding: 0 2px;
+  direction: rtl;
+  text-align: left;
 }
 
 .empty {
@@ -311,6 +379,19 @@ button {
   align-self: flex-end;
   background: #245641;
   border-bottom-right-radius: 4px;
+}
+
+.bubble.user.pending {
+  opacity: 0.65;
+}
+
+.load-older {
+  align-self: center;
+}
+
+.history-start {
+  align-self: center;
+  padding: 4px 0;
 }
 
 .bubble.assistant {

@@ -9,7 +9,7 @@
 
 ```bash
 npm install
-npm start
+npm start          # 前台模式：终端打印配对地址 + 二维码
 ```
 
 终端会打印**公网配对地址 + 二维码**（cloudflared 快速隧道，免账号；首次自动下载 Windows 二进制到 `bin/`）。
@@ -23,6 +23,41 @@ https://xxxx.trycloudflare.com/#k=<钥匙>
 bridge 只绑 127.0.0.1（局域网无法直连），隧道不可用时 `npm start` 直接报错退出，重跑即可。
 
 `#k=` 后面就是全部凭证。前提：Kimi Code 桌面版正在运行（bridge 通过 `~/.kimi-code/server/instances/*.json` 自动发现端口）。
+
+## 无窗口后台运行
+
+不想留一个前台终端，用后台模式（Windows 隐藏窗口，日志落 `logs/bridge.log`）：
+
+```bash
+npm run start:bg   # 隐藏窗口后台启动；已在跑则提示、不重复起
+npm run pair       # 打印当前配对地址 + 二维码（读 run/state.json）
+npm run stop       # 优雅停止：关隧道、回收 cloudflared、清理 run/
+```
+
+- 隧道就绪需要 10–90 秒，就绪后 `run/state.json` 写入 `{url, pid, started_at}`，`npm run pair` 随时可看。
+- **桌面版退出跟随**：bridge 每 15 秒检查所连的桌面实例，进程消失且 healthz 失联连续 5 次（约 1 分钟）就优雅退出并清理——桌面版关了，远控跟着结束，不留孤儿进程。
+- `logs/`、`run/` 均已 gitignore。
+
+### 固定域名：命名隧道（可选）
+
+快速隧道的地址每次重启都会变。有自己的 Cloudflare 账号和域名时，可一次性配置命名隧道，配对地址固定为 `https://<你的域名>`：
+
+```bash
+bin/cloudflared.exe tunnel login                                  # 浏览器授权
+bin/cloudflared.exe tunnel create kimi-remote                     # 创建隧道（记住输出的 UUID 即名称 kimi-remote）
+bin/cloudflared.exe tunnel route dns kimi-remote kimi.example.com # 绑定你的子域名
+```
+
+然后在 `.kimi-remote.json`（项目根，gitignored）加一段：
+
+```json
+{
+  "key": "<现有钥匙，别动>",
+  "tunnel": { "mode": "named", "name": "kimi-remote", "hostname": "kimi.example.com" }
+}
+```
+
+重启 bridge 即走 `cloudflared tunnel run kimi-remote`，地址固定。未配置或配置不合法时自动回退快速隧道。
 
 ## 架构（文字版）
 
@@ -52,9 +87,9 @@ bridge 只绑 127.0.0.1（局域网无法直连），隧道不可用时 `npm sta
 
 ## 已知限制
 
-- **快速隧道地址重启会变**：每次 `npm start` 生成新的 `*.trycloudflare.com`，需要重新扫码；隧道不可用则启动即报错退出，重跑即可。
+- **快速隧道地址重启会变**：每次 `npm start` / `npm run start:bg` 生成新的 `*.trycloudflare.com`，需要重新扫码；要固定地址请配置[命名隧道](#固定域名命名隧道可选)。隧道不可用则启动即报错退出，重跑即可。
 - **实验性 API 可能漂移**：桌面版 Server API 未承诺稳定。白名单集中在 `allowlist.ts`、上游请求集中在 `upstream.ts`，漂移只改这两处。
-- **新建会话的工作目录**复用最近一个真实会话的工作区（手机上不选目录）；模型取自最近会话的 activity.model（API 建的会话必须显式设 model，否则 turn 立即失败 "Model not set"）。
+- **手机新建会话**：在会话列表对应工作区分组的「+」里新建，工作目录即该组工作区；模型取该组（无则全局）最新会话的 activity.model（API 建的会话必须显式设 model，否则 turn 立即失败 "Model not set"）。
 - **Markdown 简渲染**：标题/列表/粗斜体/行内代码/围栏代码块/引用/链接，不含表格与图片。
 - 每个远控新建的临时工作区会残留一个桌面版 `kimi-cu` runner 进程（桌面版自身行为），重启桌面版后释放。
 
@@ -62,13 +97,17 @@ bridge 只绑 127.0.0.1（局域网无法直连），隧道不可用时 `npm sta
 
 | 命令 | 作用 |
 |---|---|
-| `npm start` | 起 bridge（自动构建 PWA），打印配对地址+二维码 |
+| `npm start` | 起 bridge（前台），打印配对地址+二维码 |
+| `npm run start:bg` | 无窗口后台启动（日志 `logs/bridge.log`，已在跑则不重复起） |
+| `npm run pair` | 打印当前配对地址 + 二维码（需 bridge 隧道就绪） |
+| `npm run stop` | 优雅停止 bridge + 回收 cloudflared，验证无残留 |
 | `npm run build` | 两包编译（tsc + vite） |
 | `npm run dev` | bridge + vite 热更新（vite 代理到 :7777） |
 | `npm run verify:discovery` | 验证实例发现（应为 54754 活实例） |
 | `npm run verify:e2e` | 全链路验收：加密拒绝/白名单/404/PONG 回环 |
 | `npm run verify:ws` | 加密 WS 订阅→发 prompt→30s 内收到流式事件 |
 | `npm run verify:tunnel` | 公网隧道 `/healthz` 200（失败降级验证 loopback 并提示记录） |
+| `npm run verify:ux` | 消息流分页语义 + 工作区分组字段（临时会话发 2 条消息实测） |
 
 ## 目录
 
@@ -80,11 +119,16 @@ packages/bridge/src/
   discovery.ts   桌面版实例发现（注册表+healthz 探活）
   server.ts      http 面：/healthz /box /ws 静态
   wsbridge.ts    加密 WS 协议 + 上游 WS 复用
-  tunnel.ts      cloudflared 下载与快速隧道
+  tunnel.ts      cloudflared 下载、快速隧道、命名隧道
+  runstate.ts    run/ 生命周期：pid/state/stop + 桌面退出看门狗
   cli.ts         npm start 入口（打印配对地址/二维码）
   verify/        验收脚本（只走 bridge，唯一例外见 e2e）
 packages/pwa/src/
   api.ts         加密 /box 客户端 + WS 自动重连
   crypto.ts      @noble/ciphers 信封（与 bridge 同格式）
-  views/         配对页 / 会话列表 / 会话详情（消息流+审批+提问）
+  views/         配对页 / 会话列表（按工作区分组）/ 会话详情（消息流+审批+提问）
+scripts/
+  start-bg.mjs   无窗口后台启动（detached+windowsHide，等价 wscript 方案）
+  stop.mjs       优雅停止 + 残留回收（stop 文件 → taskkill 兜底）
+  pair.mjs       打印配对地址 + 二维码
 ```

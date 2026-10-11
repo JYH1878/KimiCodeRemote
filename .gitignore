@@ -7,3 +7,5 @@ bin/
 .mimosa/
 packages/*/.mimosa/
 HANDOFF.md
+logs/
+run/

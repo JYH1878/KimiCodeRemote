@@ -16,7 +16,7 @@ import type { Instance } from './discovery.js';
 import { isAllowed } from './allowlist.js';
 import { splitPath, upstreamRequest } from './upstream.js';
 import { WsBridge } from './wsbridge.js';
-import { ensureCloudflared, startTunnel, stopTunnel } from './tunnel.js';
+import { ensureCloudflared, loadNamedTunnelConfig, startTunnel, stopTunnel } from './tunnel.js';
 import { CLOUDFLARED_BIN, MAX_BOX_BODY, PWA_DIST } from './config.js';
 
 const MIME: Record<string, string> = {
@@ -82,7 +82,8 @@ export async function startBridge(opts: BridgeOptions): Promise<Bridge> {
     ? (async () => {
         try {
           const bin = await ensureCloudflared(CLOUDFLARED_BIN, (s) => log(s));
-          return await startTunnel(bin, port, (s) => log(s));
+          const named = loadNamedTunnelConfig(opts.keyFile, (s) => log(s));
+          return await startTunnel(bin, port, (s) => log(s), named);
         } catch (e) {
           log(`tunnel unavailable: ${(e as Error).message}`);
           return null;

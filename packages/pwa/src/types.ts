@@ -13,6 +13,43 @@ export interface SessionsResponse {
   data?: { items?: SessionItem[] };
 }
 
+// ---- v2 sessions?view=by_workspace ----
+
+export type ActivityStatus = 'running' | 'approval' | 'question' | 'failed' | 'idle';
+
+export interface V2SessionMeta {
+  title?: string;
+  last_prompt?: string;
+  created_at?: number;
+  updated_at?: number;
+  archived?: boolean;
+}
+
+export interface V2SessionItem {
+  id: string;
+  workspace?: { id?: string; cwd?: string | null };
+  meta?: V2SessionMeta;
+  activity?: { status?: ActivityStatus; model?: string };
+}
+
+export interface V2WorkspaceGroupData {
+  workspace: { id?: string; cwd?: string | null };
+  sessions: V2SessionItem[];
+  total?: number;
+}
+
+export interface V2ByWorkspaceResponse {
+  code?: number;
+  msg?: string;
+  data?: {
+    groups?: V2WorkspaceGroupData[];
+    has_more?: boolean;
+    next_page_token?: string;
+  };
+}
+
+// ---- messages ----
+
 export type ContentBlock =
   | { type: 'text'; text?: string }
   | { type: 'thinking'; thinking?: string }
@@ -25,6 +62,13 @@ export interface Message {
   id: string;
   role: 'user' | 'assistant' | 'tool' | 'system';
   content: ContentBlock[];
+  /** local optimistic echo, replaced once the server confirms the real message */
+  local?: boolean;
+}
+
+export interface MessagesPageData {
+  items?: Message[]; // newest -> oldest, as returned by the server
+  has_more?: boolean;
 }
 
 export interface Approval {

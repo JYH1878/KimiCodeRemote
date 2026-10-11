@@ -3,8 +3,9 @@
 // --url http://127.0.0.1:<port>` and parses the trycloudflare URL. The tunnel
 // only ever carries ciphertext; Cloudflare can see timing and sizes at most.
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, resolve, sep } from 'node:path';
+import { BIN_DIR } from './config.js';
 
 const DOWNLOAD_URL =
   'https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe';
@@ -55,22 +56,58 @@ export async function stopTunnel(): Promise<void> {
   });
 }
 
+// Optional named-tunnel config in .kimi-remote.json:
+//   { "tunnel": { "mode": "named", "name": "...", "hostname": "..." } }
+// With a named tunnel the pairing URL is the stable https://<hostname>; the
+// one-time login/create/route-dns setup is documented in the README.
+export interface NamedTunnel {
+  name: string;
+  hostname: string;
+}
+
+export function loadNamedTunnelConfig(
+  keyFile: string,
+  log: (s: string) => void = console.error,
+): NamedTunnel | null {
+  try {
+    const cfg = JSON.parse(readFileSync(keyFile, 'utf8')) as {
+      tunnel?: { mode?: string; name?: string; hostname?: string };
+    };
+    const t = cfg.tunnel;
+    if (!t || t.mode !== 'named') return null;
+    if (typeof t.name !== 'string' || !t.name || typeof t.hostname !== 'string' || !t.hostname) {
+      log('tunnel config invalid: named mode needs non-empty name + hostname - using quick tunnel');
+      return null;
+    }
+    return { name: t.name, hostname: t.hostname.replace(/^https?:\/\//, '').replace(/\/+$/, '') };
+  } catch {
+    return null; // no config file (yet) or unparsable - quick tunnel
+  }
+}
+
 // Resolves with the public URL, or null if the tunnel could not be
 // established (no tunnel, no remote access - the CLI fails loudly).
 export function startTunnel(
   binPath: string,
   localPort: number,
   log: (s: string) => void = console.error,
+  named?: NamedTunnel | null,
 ): Promise<string | null> {
+  // containment: only the repo's own bin/ binary may ever be spawned
+  const bin = resolve(binPath);
+  if (!bin.startsWith(resolve(BIN_DIR) + sep)) {
+    return Promise.reject(new Error(`cloudflared path escaped ${BIN_DIR}`));
+  }
   return new Promise((resolve) => {
     let out = '';
     let settled = false;
-    const child = spawn(
-      binPath,
-      ['tunnel', '--no-autoupdate', '--url', `http://127.0.0.1:${localPort}`],
-      { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] },
-    );
+    const args = named
+      ? // --url doubles as the ingress rule, so no config.yml is needed
+        ['tunnel', '--no-autoupdate', 'run', '--url', `http://127.0.0.1:${localPort}`, named.name]
+      : ['tunnel', '--no-autoupdate', '--url', `http://127.0.0.1:${localPort}`];
+    const child = spawn(binPath, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
     activeChild = child;
+    if (named) log(`starting named tunnel "${named.name}" (public: https://${named.hostname})`);
     const finish = (url: string | null, why?: string) => {
       if (settled) return;
       settled = true;
@@ -89,8 +126,13 @@ export function startTunnel(
     const timeout = setTimeout(() => finish(null, 'timed out after 90s'), 90_000);
     const onLine = (line: string) => {
       out += line + '\n';
-      const m = line.match(/https:\/\/[a-z0-9][a-z0-9-]*\.trycloudflare\.com/i);
-      if (m) finish(m[0]);
+      if (named) {
+        // a named tunnel serves a fixed hostname; readiness = edge connections
+        if (/Registered tunnel connection/i.test(line)) finish(`https://${named.hostname}`);
+      } else {
+        const m = line.match(/https:\/\/[a-z0-9][a-z0-9-]*\.trycloudflare\.com/i);
+        if (m) finish(m[0]);
+      }
     };
     child.stdout.on('data', (d: Buffer) => String(d).split(/\r?\n/).forEach(onLine));
     child.stderr.on('data', (d: Buffer) => String(d).split(/\r?\n/).forEach(onLine));

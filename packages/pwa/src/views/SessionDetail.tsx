@@ -1,14 +1,90 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { Remote, WsClient } from '../api.js';
 import { Markdown } from '../md.js';
 import type {
   Approval,
   ContentBlock,
   Message,
+  MessagesPageData,
   QuestionEntry,
-  SessionsResponse,
   SessionStatus,
 } from '../types.js';
+
+const PAGE_SIZE = 50;
+
+// The server returns message pages newest -> oldest. We render oldest -> newest.
+function toChronological(items: Message[]): Message[] {
+  return [...items].reverse();
+}
+
+// Merge a freshly fetched newest-page into the loaded list: known ids keep
+// their position (content refreshed), unknown ids are newer and append at the
+// bottom. Never drops or reorders already-loaded history.
+function mergeNewestPage(existing: Message[], incoming: Message[]): Message[] {
+  if (existing.length === 0) return incoming;
+  const byId = new Map(existing.map((m) => [m.id, m]));
+  const appended: Message[] = [];
+  for (const m of incoming) {
+    if (byId.has(m.id)) byId.set(m.id, m);
+    else appended.push(m);
+  }
+  return [...byId.values(), ...appended];
+}
+
+// Prepend an older page (chronological) in front of the loaded list.
+function prependOlderPage(existing: Message[], older: Message[]): Message[] {
+  const ids = new Set(existing.map((m) => m.id));
+  return [...older.filter((m) => !ids.has(m.id)), ...existing];
+}
+
+function messageText(m: Message): string {
+  return m.content
+    .filter((b) => b.type === 'text')
+    .map((b) => (b.type === 'text' ? (b.text ?? '') : ''))
+    .join('')
+    .trim();
+}
+
+// Drop optimistic echoes whose text has been confirmed by a real (server-side)
+// user message; count-aware so double-sent identical texts don't eat each other.
+function reconcileOptimistic(list: Message[]): Message[] {
+  const realCounts = new Map<string, number>();
+  for (const m of list) {
+    if (m.role !== 'user' || m.local) continue;
+    const t = messageText(m);
+    if (t) realCounts.set(t, (realCounts.get(t) ?? 0) + 1);
+  }
+  const confirmed = new Map<string, number>();
+  return list.filter((m) => {
+    if (!m.local) return true;
+    const t = messageText(m);
+    if ((realCounts.get(t) ?? 0) > (confirmed.get(t) ?? 0)) {
+      confirmed.set(t, (confirmed.get(t) ?? 0) + 1);
+      return false;
+    }
+    return true;
+  });
+}
+
+// <system-reminder>…</system-reminder> is harness noise injected into user
+// prompts - never show it in the chat.
+function stripSystemReminder(text: string): string {
+  return text.replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, '').trim();
+}
+
+function cleanUserBlocks(blocks: ContentBlock[]): ContentBlock[] {
+  const out: ContentBlock[] = [];
+  for (const b of blocks) {
+    if (b.type === 'thinking' || b.type === 'tool_use' || b.type === 'tool_result') continue;
+    if (b.type === 'text') {
+      const t = stripSystemReminder(b.text ?? '');
+      if (t) out.push({ type: 'text', text: t });
+    } else {
+      out.push(b);
+    }
+  }
+  return out;
+}
 
 function Blocks({ blocks }: { blocks: ContentBlock[] }) {
   const parts: React.ReactNode[] = [];
@@ -62,6 +138,9 @@ export function SessionDetail({
   onBack: () => void;
 }) {
   const [messages, setMessages] = useState<Message[]>([]);
+  const [hasOlder, setHasOlder] = useState(true);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [status, setStatus] = useState<SessionStatus | null>(null);
   const [approvals, setApprovals] = useState<Approval[]>([]);
   const [questions, setQuestions] = useState<QuestionEntry[]>([]);
@@ -69,18 +148,41 @@ export function SessionDetail({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [otherText, setOtherText] = useState<Record<string, string>>({});
-  const bottomRef = useRef<HTMLDivElement | null>(null);
+  const streamRef = useRef<HTMLDivElement | null>(null);
   const refreshTimer = useRef<number | null>(null);
+  const stickToBottom = useRef(true);
+  const prependAnchor = useRef<{ height: number; top: number } | null>(null);
+  const loadingOlderRef = useRef(false);
+  const localSeq = useRef(0);
+
+  const fetchPage = useCallback(
+    async (beforeId?: string): Promise<{ items: Message[]; hasMore: boolean }> => {
+      const q = new URLSearchParams({ page_size: String(PAGE_SIZE) });
+      if (beforeId) q.set('before_id', beforeId);
+      const res = await remote.box('GET', `/api/v1/sessions/${sessionId}/messages?${q}`);
+      const payload = res.body as
+        | { code?: number; msg?: string; data?: MessagesPageData }
+        | null;
+      if (payload?.code !== 0) {
+        throw new Error(payload?.msg ?? `拉取消息失败 (${res.status})`);
+      }
+      return {
+        items: toChronological(payload.data?.items ?? []),
+        hasMore: payload.data?.has_more === true,
+      };
+    },
+    [remote, sessionId],
+  );
 
   const refresh = useCallback(async () => {
     try {
-      const [msgs, st, ap, qs] = await Promise.all([
-        remote.box('GET', `/api/v1/sessions/${sessionId}/messages`),
+      const [page, st, ap, qs] = await Promise.all([
+        fetchPage(),
         remote.box('GET', `/api/v1/sessions/${sessionId}/status`),
         remote.box('GET', `/api/v1/sessions/${sessionId}/approvals?status=pending`),
         remote.box('GET', `/api/v1/sessions/${sessionId}/questions?status=pending`),
       ]);
-      setMessages((msgs.body as { data?: { items?: Message[] } } | null)?.data?.items ?? []);
+      setMessages((prev) => reconcileOptimistic(mergeNewestPage(prev, page.items)));
       setStatus((st.body as { data?: SessionStatus } | null)?.data ?? null);
       setApprovals((ap.body as { data?: { items?: Approval[] } } | null)?.data?.items ?? []);
       setQuestions((qs.body as { data?: { items?: QuestionEntry[] } } | null)?.data?.items ?? []);
@@ -88,7 +190,7 @@ export function SessionDetail({
     } catch (e) {
       setError((e as Error).message);
     }
-  }, [remote, sessionId]);
+  }, [fetchPage, remote, sessionId]);
 
   const scheduleRefresh = useCallback(() => {
     if (refreshTimer.current) return;
@@ -97,6 +199,51 @@ export function SessionDetail({
       void refresh();
     }, 250);
   }, [refresh]);
+
+  // initial load: newest page, land at the bottom of the conversation
+  useEffect(() => {
+    let cancelled = false;
+    setMessages([]);
+    setHasOlder(true);
+    setInitialLoading(true);
+    stickToBottom.current = true;
+    void (async () => {
+      try {
+        const { items, hasMore } = await fetchPage();
+        if (cancelled) return;
+        setMessages(items);
+        setHasOlder(hasMore);
+        setError(null);
+      } catch (e) {
+        if (!cancelled) setError((e as Error).message);
+      } finally {
+        if (!cancelled) setInitialLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchPage]);
+
+  const loadOlder = useCallback(async () => {
+    if (loadingOlderRef.current || !hasOlder) return;
+    const oldest = messages[0];
+    if (!oldest) return;
+    loadingOlderRef.current = true;
+    setLoadingOlder(true);
+    const el = streamRef.current;
+    if (el) prependAnchor.current = { height: el.scrollHeight, top: el.scrollTop };
+    try {
+      const { items, hasMore } = await fetchPage(oldest.id);
+      setMessages((prev) => prependOlderPage(prev, items));
+      setHasOlder(hasMore);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      loadingOlderRef.current = false;
+      setLoadingOlder(false);
+    }
+  }, [fetchPage, hasOlder, messages]);
 
   useEffect(() => {
     void refresh();
@@ -122,15 +269,39 @@ export function SessionDetail({
     void ws.subscribe(sessionId);
   }, [live, sessionId, ws]);
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [messages.length]);
+  // keep the viewport glued to the bottom on new output, but never yank the
+  // user away while they read history; restore position after prepending.
+  useLayoutEffect(() => {
+    const el = streamRef.current;
+    if (!el) return;
+    if (prependAnchor.current) {
+      el.scrollTop = el.scrollHeight - prependAnchor.current.height + prependAnchor.current.top;
+      prependAnchor.current = null;
+      return;
+    }
+    if (stickToBottom.current) el.scrollTop = el.scrollHeight;
+  }, [messages, status?.busy, initialLoading]);
+
+  const onStreamScroll = useCallback(() => {
+    const el = streamRef.current;
+    if (!el) return;
+    stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    if (el.scrollTop < 60 && hasOlder && !loadingOlderRef.current) void loadOlder();
+  }, [hasOlder, loadOlder]);
 
   const send = useCallback(async () => {
     const text = input.trim();
     if (!text || sending) return;
     setSending(true);
     setInput('');
+    const optimistic: Message = {
+      id: `local-${Date.now()}-${++localSeq.current}`,
+      role: 'user',
+      content: [{ type: 'text', text }],
+      local: true,
+    };
+    stickToBottom.current = true;
+    setMessages((prev) => [...prev, optimistic]);
     try {
       const res = await remote.box('POST', `/api/v1/sessions/${sessionId}/prompts`, {
         content: [{ type: 'text', text }],
@@ -145,6 +316,7 @@ export function SessionDetail({
       }
       scheduleRefresh();
     } catch (e) {
+      setMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
       setError((e as Error).message);
     } finally {
       setSending(false);
@@ -201,7 +373,7 @@ export function SessionDetail({
         <span className={`conn ${live ? 'ok' : 'poll'}`}>{live ? '实时' : '轮询'}</span>
       </header>
 
-      <div className="stream">
+      <div className="stream" ref={streamRef} onScroll={onStreamScroll}>
         {approvals.map((a) => (
           <div key={a.approval_id} className="card approval-card">
             <div className="card-head">🔐 待审批 · {a.tool_name}</div>
@@ -254,17 +426,37 @@ export function SessionDetail({
           </div>
         ))}
 
-        {messages.map((m) =>
-          m.role === 'user' ? (
-            <div key={m.id} className="bubble user">
-              <Blocks blocks={m.content.filter((b) => b.type !== 'thinking')} />
-            </div>
-          ) : m.role === 'assistant' ? (
-            <div key={m.id} className="bubble assistant">
-              <Blocks blocks={m.content} />
-            </div>
-          ) : null,
+        {hasOlder && !initialLoading && (
+          <div className="load-older">
+            <button className="btn ghost" disabled={loadingOlder} onClick={() => void loadOlder()}>
+              {loadingOlder ? '加载中…' : '↑ 加载更早的消息'}
+            </button>
+          </div>
         )}
+        {!hasOlder && !initialLoading && messages.length > 0 && (
+          <div className="history-start muted small">— 已经是最早的消息 —</div>
+        )}
+        {initialLoading && <div className="history-start muted small">加载中…</div>}
+
+        {messages.map((m) => {
+          if (m.role === 'user') {
+            const blocks = cleanUserBlocks(m.content);
+            if (blocks.length === 0) return null;
+            return (
+              <div key={m.id} className={`bubble user${m.local ? ' pending' : ''}`}>
+                <Blocks blocks={blocks} />
+              </div>
+            );
+          }
+          if (m.role === 'assistant') {
+            return (
+              <div key={m.id} className="bubble assistant">
+                <Blocks blocks={m.content} />
+              </div>
+            );
+          }
+          return null; // tool / system messages are not part of the chat UI
+        })}
         {status?.busy && (
           <div className="typing">
             <span></span>
@@ -272,7 +464,6 @@ export function SessionDetail({
             <span></span>
           </div>
         )}
-        <div ref={bottomRef} />
       </div>
 
       {error && <div className="error-note">{error}</div>}
