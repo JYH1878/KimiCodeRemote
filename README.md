@@ -32,7 +32,7 @@ bridge 只绑 127.0.0.1（局域网无法直连），隧道不可用时 `npm sta
 │ PWA    │ ◀───────────────────── │ :7777       │ ◀──────────────── │ server 127.0.0.1 │
 └────────┘   {iv,ct} 密文信封      └─────────────┘  server.token     └──────────────────┘
      │            ▲                     │
-     │ WSS(密文帧) └────── /ws 加密帧桥  └─── cloudflared 快速隧道（只转发密文，可选）
+     │ WSS(密文帧) └────── /ws 加密帧桥  └─── cloudflared 快速隧道（只转发密文）
      └── 浏览器内存持有钥匙；localStorage 存副本
 ```
 
@@ -64,7 +64,7 @@ bridge 只绑 127.0.0.1（局域网无法直连），隧道不可用时 `npm sta
 |---|---|
 | `npm start` | 起 bridge（自动构建 PWA），打印配对地址+二维码 |
 | `npm run build` | 两包编译（tsc + vite） |
-| `npm run dev` | bridge + vite 热更新（vite 代理到 ：7777） |
+| `npm run dev` | bridge + vite 热更新（vite 代理到 :7777） |
 | `npm run verify:discovery` | 验证实例发现（应为 54754 活实例） |
 | `npm run verify:e2e` | 全链路验收：加密拒绝/白名单/404/PONG 回环 |
 | `npm run verify:ws` | 加密 WS 订阅→发 prompt→30s 内收到流式事件 |
