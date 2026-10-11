@@ -1,135 +1,205 @@
-# kimi-remote
+# KimiCodeRemote
 
-手机远控电脑上的 **Kimi Code 桌面版**：会话列表 → 实时消息流 → 发消息 → 审批/提问应答。
-任意网络可达（4G 可连），且**端到端加密**——中继只搬密文。
+English | [简体中文](README.zh-CN.md)
 
-> 官方桌面版远控尚未发布（PR #4169 开发中），第三方产品均只支持 CLI。本项目是桌面版的首个可用远控方案。调研依据见 [REPORT.md](REPORT.md)。
+Remote-control the **Kimi Code desktop app** from your phone: session list →
+live message stream → send prompts → answer approvals/questions. Reachable
+from any network (works over 4G) and **end-to-end encrypted** — the relay
+only ever carries ciphertext.
 
-## 30 秒上手
+> **Disclaimer**: This is an unofficial community project, not affiliated
+> with or endorsed by Moonshot AI. Kimi is a trademark of Moonshot AI.
+
+> Official remote control for the desktop app has not shipped yet (PR #4169
+> in development) and third-party tools only support the CLI. This project
+> is the first working remote for the desktop app. Research notes in
+> [REPORT.md](REPORT.md) (Chinese).
+
+## 30-second start
 
 ```bash
 npm install
-npm start          # 前台模式：终端打印配对地址 + 二维码
+npm start          # foreground: prints the pairing URL + QR code
 ```
 
-终端会打印**公网配对地址 + 二维码**（cloudflared 快速隧道，免账号；首次自动下载 Windows 二进制到 `bin/`）。
+The terminal prints a **public pairing URL + QR code** (cloudflared quick
+tunnel, no account needed; on first run the matching cloudflared binary for
+your OS is downloaded into `bin/` — Windows and macOS are supported).
 
-手机（任意网络，4G 也行）**扫码或打开配对地址**即可，形如：
+Open the URL or scan the QR code on your phone (any network, 4G included).
+It looks like:
 
 ```
-https://xxxx.trycloudflare.com/#k=<钥匙>
+https://xxxx.trycloudflare.com/#k=<key>
 ```
 
-bridge 只绑 127.0.0.1（局域网无法直连），隧道不可用时 `npm start` 直接报错退出，重跑即可。
+The bridge binds 127.0.0.1 only (nothing reachable from the LAN). If the
+tunnel cannot be established, `npm start` fails loudly — just rerun it.
 
-`#k=` 后面就是全部凭证。前提：Kimi Code 桌面版正在运行（bridge 通过 `~/.kimi-code/server/instances/*.json` 自动发现端口）。
+Everything after `#k=` is the entire credential. Prerequisite: the Kimi Code
+desktop app is running (the bridge discovers its port automatically via
+`~/.kimi-code/server/instances/*.json`).
 
-## 无窗口后台运行
+## Windowless background mode
 
-不想留一个前台终端，用后台模式（Windows 隐藏窗口，日志落 `logs/bridge.log`）：
+Prefer no lingering terminal? Run in the background (hidden window on
+Windows, logs go to `logs/bridge.log`):
 
 ```bash
-npm run start:bg   # 隐藏窗口后台启动；已在跑则提示、不重复起
-npm run pair       # 打印当前配对地址 + 二维码（读 run/state.json）
-npm run stop       # 优雅停止：关隧道、回收 cloudflared、清理 run/
+npm run start:bg   # hidden-window background start; refuses to double-start
+npm run pair       # print the current pairing URL + QR code (reads run/state.json)
+npm run stop       # graceful stop: close tunnel, reap cloudflared, clean run/
 ```
 
-- 隧道就绪需要 10–90 秒，就绪后 `run/state.json` 写入 `{url, pid, started_at}`，`npm run pair` 随时可看。
-- **桌面版退出跟随**：bridge 每 15 秒检查所连的桌面实例，进程消失且 healthz 失联连续 5 次（约 1 分钟）就优雅退出并清理——桌面版关了，远控跟着结束，不留孤儿进程。
-- `logs/`、`run/` 均已 gitignore。
+- The tunnel takes 10–90 seconds to become ready; `run/state.json` then
+  contains `{url, pid, started_at}` — `npm run pair` shows it any time.
+- **Desktop-exit follow**: every 15s the bridge checks the desktop instance
+  it is attached to; after the pid is gone and healthz has failed 5 times in
+  a row (~1 minute) it shuts down and cleans up after itself. Desktop app
+  closed → remote control ends, no orphan processes.
+- `logs/` and `run/` are gitignored.
 
-### 固定域名：命名隧道（可选）
+### Fixed hostname: named tunnel (optional)
 
-快速隧道的地址每次重启都会变。有自己的 Cloudflare 账号和域名时，可一次性配置命名隧道，配对地址固定为 `https://<你的域名>`：
+Quick-tunnel URLs change on every restart. With your own Cloudflare account
+and domain you can set up a named tunnel once and pin the pairing URL to
+`https://<your-domain>` (`bin/cloudflared` is `bin/cloudflared.exe` on
+Windows):
 
 ```bash
-bin/cloudflared.exe tunnel login                                  # 浏览器授权
-bin/cloudflared.exe tunnel create kimi-remote                     # 创建隧道（记住输出的 UUID 即名称 kimi-remote）
-bin/cloudflared.exe tunnel route dns kimi-remote kimi.example.com # 绑定你的子域名
+bin/cloudflared tunnel login                                        # browser auth
+bin/cloudflared tunnel create kimicoderemote                        # create (note the UUID; the name is kimicoderemote)
+bin/cloudflared tunnel route dns kimicoderemote kimi.example.com    # bind your subdomain
 ```
 
-然后在 `.kimi-remote.json`（项目根，gitignored）加一段：
+Then add this to `.kimi-remote.json` (project root, gitignored):
 
 ```json
 {
-  "key": "<现有钥匙，别动>",
-  "tunnel": { "mode": "named", "name": "kimi-remote", "hostname": "kimi.example.com" }
+  "key": "<your existing key, untouched>",
+  "tunnel": { "mode": "named", "name": "kimicoderemote", "hostname": "kimi.example.com" }
 }
 ```
 
-重启 bridge 即走 `cloudflared tunnel run kimi-remote`，地址固定。未配置或配置不合法时自动回退快速隧道。
+Restart the bridge and it runs `cloudflared tunnel run kimicoderemote`
+with a fixed URL. Missing/invalid config falls back to the quick tunnel.
 
-## 架构（文字版）
+## Architecture (text diagram)
 
 ```
-┌────────┐  AES-256-GCM 加密信封   ┌─────────────┐   明文+Bearer     ┌──────────────────┐
-│ 手机    │ ─────────────────────▶ │ bridge(电脑) │ ────────────────▶ │ Kimi 桌面版内嵌   │
-│ PWA    │ ◀───────────────────── │ :7777       │ ◀──────────────── │ server 127.0.0.1 │
-└────────┘   {iv,ct} 密文信封      └─────────────┘  server.token     └──────────────────┘
-     │            ▲                     │
-     │ WSS(密文帧) └────── /ws 加密帧桥  └─── cloudflared 快速隧道（只转发密文）
-     └── 浏览器内存持有钥匙；localStorage 存副本
+┌────────┐  AES-256-GCM envelope   ┌─────────────┐  plaintext+Bearer ┌──────────────────┐
+│ phone  │ ──────────────────────▶ │ bridge (PC) │ ────────────────▶ │ Kimi desktop's   │
+│ PWA    │ ◀────────────────────── │ :7777       │ ◀──────────────── │ embedded server  │
+└────────┘   {iv,ct} ciphertext    └─────────────┘  server.token     │ on 127.0.0.1     │
+     │            ▲                     │                            └──────────────────┘
+     │ WSS (encrypted frames)           │
+     └── /ws encrypted frame bridge ────┴── cloudflared quick tunnel (ciphertext only)
+     └── key lives in browser memory; a copy in localStorage
 ```
 
-- **bridge**（`packages/bridge`，Node+TS）：只暴露 4 个面——静态 PWA、`GET /healthz`、`POST /box`（加密 HTTP 代理）、`WS /ws`（加密双向帧桥）。其余一律 404。
-- **pwa**（`packages/pwa`，Vite+React+TS，移动优先）：构建产物由 bridge 直接 serve。
-- 桌面版的 `server.token` 只存在于 bridge→127.0.0.1 的请求头里，永不出现在任何响应、日志或前端产物。
+- **bridge** (`packages/bridge`, Node+TS): exposes exactly 4 surfaces — the
+  static PWA, `GET /healthz`, `POST /box` (encrypted HTTP proxy) and
+  `WS /ws` (encrypted bidirectional frame bridge). Everything else is 404.
+- **pwa** (`packages/pwa`, Vite+React+TS, mobile-first): built assets are
+  served by the bridge directly.
+- The desktop app's `server.token` only ever exists in bridge→127.0.0.1
+  request headers; it never appears in any response, log, or frontend asset.
 
-## 安全模型
+## Security model
 
-- **单钥匙模型**：首次启动生成 32 字节随机钥匙，存项目根 `.kimi-remote.json`（已 gitignore）。钥匙即全部凭证——能解出合法密文就是自己人，解不出一律 401 拒绝，无用户名无密码无会话。
-- **AES-256-GCM**：每条消息随机 12 字节 IV，密文后附 16 字节 tag，线上格式 `{iv, ct}`（base64url）。浏览器端用 [@noble/ciphers](https://github.com/paulmillr/noble-ciphers) 纯 JS 实现（不依赖 Web Crypto，任何环境可用），bridge 端用 node:crypto，两者互通。
-- **中继只搬密文**：cloudflared 快速隧道只传输密文信封（bridge 只绑 127.0.0.1，不暴露局域网端口）。中继/旁观者理论上可见的只有元数据（连接时间、流量大小、目标域名）。
-- **白名单**：解密后的内层 path 必须命中 `packages/bridge/src/allowlist.ts`（唯一白名单文件）：`/api/v1/healthz`、`GET /api/v2/sessions`、`/api/v1/sessions` 及其子路由（messages/prompts/prompts:steer/approvals/questions/status/transcript/children/profile/:delete）。其余一律 403——尤其 shutdown、config、providers、oauth、fs*、files、remote-control。
-- **钥匙泄露处置**：删除 `.kimi-remote.json` 并重启 bridge，钥匙立即更换；旧配对地址全部失效。
-- **元数据残留**：快速隧道的随机子域名、连接时段与流量大小会被 Cloudflare 看到；会话标题/内容/文件路径均在密文内。bridge 不落任何盘上日志（终端输出除外）。
-- 手机端钥匙存 localStorage（`kimi_remote_key`）：共用手机/浏览器时注意；URL hash 里的钥匙在载入后立即从地址栏抹掉。
+- **Single-key model**: on first start a random 32-byte key is generated and
+  stored in `.kimi-remote.json` in the project root (gitignored). The key is
+  the entire credential — whoever can produce valid ciphertext is in,
+  everything else gets a 401. No usernames, passwords, or sessions.
+- **AES-256-GCM**: a random 12-byte IV per message, 16-byte tag appended to
+  the ciphertext, wire format `{iv, ct}` (base64url). The browser side uses
+  a pure-JS implementation from [@noble/ciphers](https://github.com/paulmillr/noble-ciphers)
+  (no Web Crypto — that is unavailable in non-secure contexts); the bridge
+  uses node:crypto. The two interoperate.
+- **The relay only carries ciphertext**: the cloudflared quick tunnel
+  forwards encrypted envelopes only (the bridge binds 127.0.0.1, no LAN
+  port is exposed). What Cloudflare and observers can theoretically see is
+  metadata: connection times, traffic sizes, the domain.
+- **Allowlist**: after decryption the inner path must match
+  `packages/bridge/src/allowlist.ts` (the single allowlist file):
+  `/api/v1/healthz`, `GET /api/v2/sessions`, `/api/v1/sessions` and its
+  sub-routes (messages/prompts/prompts:steer/approvals/questions/status/
+  transcript/children/profile/:delete). Everything else is 403 — notably
+  shutdown, config, providers, oauth, fs*, files, remote-control.
+- **Key-leak handling**: delete `.kimi-remote.json` and restart the bridge —
+  the key rotates immediately and all previously paired URLs stop working.
+- **Metadata residue**: the quick tunnel's random subdomain, connection
+  times, and traffic sizes are visible to Cloudflare; session
+  titles/contents/file paths stay inside the ciphertext. The bridge writes
+  no logs to disk (terminal output excepted).
+- The phone keeps its key in localStorage (`kimi_remote_key`): mind shared
+  phones/browsers. The key in the URL hash is wiped from the address bar
+  immediately after load.
 
-## 已知限制
+## Known limitations
 
-- **快速隧道地址重启会变**：每次 `npm start` / `npm run start:bg` 生成新的 `*.trycloudflare.com`，需要重新扫码；要固定地址请配置[命名隧道](#固定域名命名隧道可选)。隧道不可用则启动即报错退出，重跑即可。
-- **实验性 API 可能漂移**：桌面版 Server API 未承诺稳定。白名单集中在 `allowlist.ts`、上游请求集中在 `upstream.ts`，漂移只改这两处。
-- **手机新建会话**：在会话列表对应工作区分组的「+」里新建，工作目录即该组工作区；模型取该组（无则全局）最新会话的 activity.model（API 建的会话必须显式设 model，否则 turn 立即失败 "Model not set"）。
-- **Markdown 简渲染**：标题/列表/粗斜体/行内代码/围栏代码块/引用/链接，不含表格与图片。
-- 每个远控新建的临时工作区会残留一个桌面版 `kimi-cu` runner 进程（桌面版自身行为），重启桌面版后释放。
+- **Quick-tunnel URLs change on restart**: every `npm start` /
+  `npm run start:bg` gets a new `*.trycloudflare.com` and you re-scan; use a
+  [named tunnel](#fixed-hostname-named-tunnel-optional) for a stable
+  address. If the tunnel is unavailable, startup fails loudly — rerun.
+- **Experimental APIs may drift**: the desktop Server API is not guaranteed
+  stable. The allowlist lives in `allowlist.ts` and upstream calls in
+  `upstream.ts`; a version drift only touches those two files.
+- **Creating sessions from the phone**: use the "+" in the session list's
+  workspace group; the working directory is that group's workspace. The
+  model is taken from the group's (or globally) newest session's
+  `activity.model` — sessions created via API must set the model explicitly
+  or the turn fails immediately with "Model not set".
+- **Simple Markdown rendering**: headings/lists/emphasis/inline code/fenced
+  code blocks/quotes/links; no tables or images.
+- Every temp workspace created by the remote leaves one `kimi-cu` runner
+  process behind (desktop-app behavior); restarting the desktop app
+  releases them.
 
-## 命令
+## Commands
 
-| 命令 | 作用 |
+| Command | Purpose |
 |---|---|
-| `npm start` | 起 bridge（前台），打印配对地址+二维码 |
-| `npm run start:bg` | 无窗口后台启动（日志 `logs/bridge.log`，已在跑则不重复起） |
-| `npm run pair` | 打印当前配对地址 + 二维码（需 bridge 隧道就绪） |
-| `npm run stop` | 优雅停止 bridge + 回收 cloudflared，验证无残留 |
-| `npm run build` | 两包编译（tsc + vite） |
-| `npm run dev` | bridge + vite 热更新（vite 代理到 :7777） |
-| `npm run verify:discovery` | 验证实例发现（应为 54754 活实例） |
-| `npm run verify:e2e` | 全链路验收：加密拒绝/白名单/404/PONG 回环 |
-| `npm run verify:ws` | 加密 WS 订阅→发 prompt→30s 内收到流式事件 |
-| `npm run verify:tunnel` | 公网隧道 `/healthz` 200（失败降级验证 loopback 并提示记录） |
-| `npm run verify:ux` | 消息流分页语义 + 工作区分组字段（临时会话发 2 条消息实测） |
-| `npm run verify:pwa` | PWA 消息清洗断言（直连桌面 server 只读拉取真实会话取证） |
+| `npm start` | start the bridge (foreground), print pairing URL + QR |
+| `npm run start:bg` | hidden-window background start (logs in `logs/bridge.log`, refuses to double-start) |
+| `npm run pair` | print the current pairing URL + QR (needs the tunnel ready) |
+| `npm run stop` | graceful stop + cloudflared reaping, verifies no leftovers |
+| `npm run build` | build both packages (tsc + vite) |
+| `npm run dev` | bridge + vite hot reload (vite proxies to :7777) |
+| `npm run verify:discovery` | verify desktop-instance discovery (passes when any live instance is found) |
+| `npm run verify:e2e` | end-to-end checks: encrypted refusals/allowlist/404/PONG round-trip |
+| `npm run verify:ws` | encrypted WS subscribe → prompt → streaming events within 30s |
+| `npm run verify:tunnel` | public tunnel `/healthz` 200 (falls back to loopback check with a notice) |
+| `npm run verify:ux` | message-flow paging semantics + workspace-group fields (sends 2 messages in a temp session) |
+| `npm run verify:pwa` | PWA message-cleaning assertions (read-only fetch of a real session via the desktop server) |
 
-## 目录
+`verify:*` scripts need the Kimi Code desktop app running on this machine —
+they are for local validation, not CI (CI only runs `npm ci` + build).
+
+## Layout
 
 ```
 packages/bridge/src/
-  allowlist.ts   白名单（唯一文件）
-  upstream.ts    上行路径与请求（唯一文件）
-  crypto.ts      AES-256-GCM 信封
-  discovery.ts   桌面版实例发现（注册表+healthz 探活）
-  server.ts      http 面：/healthz /box /ws 静态
-  wsbridge.ts    加密 WS 协议 + 上游 WS 复用
-  tunnel.ts      cloudflared 下载、快速隧道、命名隧道
-  runstate.ts    run/ 生命周期：pid/state/stop + 桌面退出看门狗
-  cli.ts         npm start 入口（打印配对地址/二维码）
-  verify/        验收脚本（只走 bridge，唯一例外见 e2e）
+  allowlist.ts   the allowlist (single file)
+  upstream.ts    upstream paths & requests (single file)
+  crypto.ts      AES-256-GCM envelopes
+  discovery.ts   desktop-instance discovery (registry + healthz probing)
+  server.ts      http surfaces: /healthz /box /ws static
+  wsbridge.ts    encrypted WS protocol + upstream WS reuse
+  tunnel.ts      cloudflared download (cross-platform), quick/named tunnels
+  runstate.ts    run/ lifecycle: pid/state/stop + desktop-exit watchdog
+  cli.ts         npm start entry (prints pairing URL/QR)
+  verify/        acceptance scripts (bridge-only, one exception in e2e)
 packages/pwa/src/
-  api.ts         加密 /box 客户端 + WS 自动重连
-  crypto.ts      @noble/ciphers 信封（与 bridge 同格式）
-  views/         配对页 / 会话列表（按工作区分组）/ 会话详情（消息流+审批+提问）
+  api.ts         encrypted /box client + WS auto-reconnect
+  crypto.ts      @noble/ciphers envelopes (same format as the bridge)
+  views/         pairing / session list (workspace-grouped) / session detail (stream + approvals + questions)
 scripts/
-  start-bg.mjs   无窗口后台启动（detached+windowsHide，等价 wscript 方案）
-  stop.mjs       优雅停止 + 残留回收（stop 文件 → taskkill 兜底）
-  pair.mjs       打印配对地址 + 二维码
+  start-bg.mjs   windowless background start (detached+windowsHide)
+  stop.mjs       graceful stop + leftover reaping (stop file → taskkill fallback)
+  pair.mjs       print pairing URL + QR code
 ```
+
+## License
+
+[MIT](LICENSE)
