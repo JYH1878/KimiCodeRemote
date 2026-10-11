@@ -116,3 +116,27 @@
 - cli.ts：非 TTY（后台日志）时不再打印带钥匙的配对 URL，改打无钥匙 URL + 提示 `npm run pair`；TTY（npm start 前台）行为不变。修复后实测：bridge.log 零 `#k=`、隧道就绪、公网 healthz ok、看门狗退出路径正常。改动已 git add 进暂存区。
 
 **结论：迭代二通过验收。** Mimosa 拦截经独立复核为误报，领导拍板后已提交关闭（详见 §9）。
+
+### 11. 迭代三：消息流净化 + ZCode 风卡片 + Kimi 配色（2026-10-11）
+
+**取证（真实会话 session_2fa63600…3dc，46 条消息，任务书外的新发现）**
+- `metadata.origin.kind` 实测种类：`user`（普通）、`skill_activation`、`injection`（variant: loadable-tools / date_change / **interruption**——任务书未列，同判不渲染）、`task`（后台任务 `<notification>` 噪音——任务书未列，判不渲染）。
+- skill_activation：userText 三级来源 `skillArgs`（剥 `[name](kimi-code://skill/…)` 提及标记）→ `clientMetadata[0].display_text`（剥末尾附件文件名行 + 开头裸 skill 名）→ 剥净正文（去 `<skill-loaded>` 信封与 "User activated…" 行）；末道保险：userText 含信封痕迹则置空。rawText= `<skill-loaded>` 内说明书 excerpt（≤600 字符）供展开查看。
+- 纯图 user 消息（3 图无文字）：正文全是 `<system>Image compressed…` 噪音 → 剥后为空 → 不产空气泡（断言覆盖）。
+
+**实现（只动 packages/pwa、scripts/、根 package.json；bridge 零改动）**
+- `types.ts`：Message 增可选 `metadata.origin`（字段全可选）。
+- 新增 `clean.ts` 纯函数：`classifyMessage`（hidden/assistant/user/skill）+ `cleanUserMessage`（{skillName,userText,rawText}）+ `stripHarnessNoise`（`<system-reminder>`+`<system>` 双剥）。
+- `SessionDetail.tsx`：接入 clean.ts；skill 消息=默认收起的「✨ skill「名」」细条（展开看 args+说明书摘要）+ 用户原话照普通消息渲染；清洗后为空不产气泡；用户消息改右侧深色圆角卡片（panel-2+发丝边，超长 max-height 截断）；助手消息全宽平铺去气泡框；审批卡/提问卡/输入条/顶栏结构不动只重刷色。
+- `SessionList.tsx`：每工作区一张 16px 圆角卡片——头部（亮蓝圆角方块 SVG 文件夹图标 + 粗体名 +「本地」描边胶囊 +「N 个任务」+ 折叠箭头 +「+」方钮）；副行（完整路径 rtl 截断 + 「更新于 xx」）；卡内会话行（标题省略+相对时间+右侧状态胶囊，行间发丝线）。by_workspace 拉取/翻页/折叠/5s 轮询+WS/archived 过滤/组内新建全部保留。
+- `styles.css` 全量重写：`--bg:#0A0C10 --panel:#12161D --panel-2:#1A2029 --border:#242C38 --text:#E8EAF0 --muted:#8B93A5 --accent:#3D7BFF`（其上白字），危险/警示色保留；旧绿 #18e299/#245641（含 rgba 变体）全仓零残留（src+dist grep 确认）；`index.html` 的 theme-color 与 SVG favicon 同步换蓝（favicon 是最后一处旧绿）。
+- `scripts/verify-pwa.mjs` + 根 `verify:pwa`：项目自带 tsc 把 clean.ts 单文件编到临时目录（`import type` 被擦除，产物零运行时依赖）→ 真实拉取取证会话 46 条 → 18 项断言（skillName==="leader"、userText 含「推进项目」且不含信封字样、3 条 injection+1 条 task+24 条 tool 全 hidden、普通 user 原文通过、纯图 user 剥空、assistant 全通过）。禁伪造数据。
+
+**web-design-guidelines 审查（联网拉到 vercel-labs 规则后逐条过）修复项**
+- icon 按钮/输入框补 aria-label；`:focus-visible` 焦点环（2px accent）；hover 态限定 `@media(hover:hover)`；`prefers-reduced-motion` 降级；时间数字 tabular-nums；`.stream` overscroll-behavior:contain；输入控件 16px 防 iOS 自动缩放；theme-color 跟页面底色。
+
+**验收**
+1. `npm run build` ✅（两包 tsc+vite 零错误）；`verify:pwa` ✅ 18/18；`verify:discovery` ✅；`verify:e2e` ✅ 14 项；`verify:ws` ✅ 4 项；`verify:ux` ✅ 12 项。
+2. `verify:tunnel` 首跑 FAIL（新 quick tunnel 30 次重试不可达）——**已知环境干扰复现**（本机 DNS 间歇劣化，见 §公网隧道实测证据）；同期主隧道公网 healthz 200，单独重跑 verify:tunnel ✅ exit 0（12 次重试后通）。与本次改动无关（bridge 零改动）。
+3. 视觉自查（桌面浏览器 390×844 移动视口，本地 7777）：列表页工作区卡片/副行/状态胶囊/发丝线 ✓；聊天页 skill 细条默认收起+点击展开（args+摘要）✓、用户原话右侧深色卡片 ✓、injection/task 不可见 ✓、助手全宽平铺+thinking/工具折叠 ✓、顶栏/输入条/审批配色 ✓、无绿色残留 ✓。
+4. 遗留：管理者手机视口终验（完成条件 2）。

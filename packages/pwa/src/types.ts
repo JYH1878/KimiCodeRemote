@@ -58,10 +58,26 @@ export type ContentBlock =
   | { type: 'image'; [k: string]: unknown }
   | { type: 'other' };
 
+// ---- message origin metadata (desktop server v2.1.1, all fields optional) ----
+
+export interface MessageOrigin {
+  kind?: string; // 'user' | 'injection' | 'skill_activation' | 'task' | …
+  variant?: string; // injection sub-kind: loadable-tools / date_change / interruption
+  skillName?: string;
+  skillArgs?: string;
+  clientMetadata?: Array<{
+    display_text?: string;
+    kimi_code_composer?: { attachments?: Array<{ name?: string }> };
+    [k: string]: unknown;
+  }>;
+  [k: string]: unknown;
+}
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant' | 'tool' | 'system';
   content: ContentBlock[];
+  metadata?: { origin?: MessageOrigin; [k: string]: unknown };
   /** local optimistic echo, replaced once the server confirms the real message */
   local?: boolean;
 }

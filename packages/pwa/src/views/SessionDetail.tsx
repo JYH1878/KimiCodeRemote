@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { Remote, WsClient } from '../api.js';
+import { classifyMessage, cleanUserMessage } from '../clean.js';
 import { Markdown } from '../md.js';
 import type {
   Approval,
@@ -66,25 +67,8 @@ function reconcileOptimistic(list: Message[]): Message[] {
   });
 }
 
-// <system-reminder>…</system-reminder> is harness noise injected into user
-// prompts - never show it in the chat.
-function stripSystemReminder(text: string): string {
-  return text.replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, '').trim();
-}
-
-function cleanUserBlocks(blocks: ContentBlock[]): ContentBlock[] {
-  const out: ContentBlock[] = [];
-  for (const b of blocks) {
-    if (b.type === 'thinking' || b.type === 'tool_use' || b.type === 'tool_result') continue;
-    if (b.type === 'text') {
-      const t = stripSystemReminder(b.text ?? '');
-      if (t) out.push({ type: 'text', text: t });
-    } else {
-      out.push(b);
-    }
-  }
-  return out;
-}
+// <system-reminder> / <system> stripping lives in clean.ts (shared, unit-verified).
+// cleanUserBlocks is replaced by classifyMessage + cleanUserMessage.
 
 function Blocks({ blocks }: { blocks: ContentBlock[] }) {
   const parts: React.ReactNode[] = [];
@@ -412,6 +396,7 @@ export function SessionDetail({
                     <div className="other-row">
                       <input
                         value={otherText[q.id] ?? ''}
+                        aria-label={q.other_label ?? '自定义回答'}
                         placeholder={q.other_label ?? '自定义回答…'}
                         onChange={(e) => setOtherText((prev) => ({ ...prev, [q.id]: e.target.value }))}
                       />
@@ -439,23 +424,46 @@ export function SessionDetail({
         {initialLoading && <div className="history-start muted small">加载中…</div>}
 
         {messages.map((m) => {
-          if (m.role === 'user') {
-            const blocks = cleanUserBlocks(m.content);
-            if (blocks.length === 0) return null;
+          const cls = classifyMessage(m);
+          if (cls === 'hidden') return null; // injections / task notices / tool+system roles
+          if (cls === 'assistant') {
             return (
-              <div key={m.id} className={`bubble user${m.local ? ' pending' : ''}`}>
-                <Blocks blocks={blocks} />
-              </div>
-            );
-          }
-          if (m.role === 'assistant') {
-            return (
-              <div key={m.id} className="bubble assistant">
+              <div key={m.id} className="msg assistant">
                 <Blocks blocks={m.content} />
               </div>
             );
           }
-          return null; // tool / system messages are not part of the chat UI
+          const cleaned = cleanUserMessage(m);
+          if (cls === 'skill') {
+            // activation envelope -> a thin collapsed strip; the user's own
+            // words (if any) render as a normal user card beside it
+            return (
+              <div key={m.id} className="skill-group">
+                <details className="skill-strip">
+                  <summary>✨ skill「{cleaned.skillName}」</summary>
+                  <div className="skill-detail">
+                    {cleaned.userText && <div className="skill-args">{cleaned.userText}</div>}
+                    {cleaned.rawText && <div className="skill-raw muted small">{cleaned.rawText}</div>}
+                  </div>
+                </details>
+                {cleaned.userText && (
+                  <div className="bubble user">
+                    <div className="user-text">
+                      <Markdown text={cleaned.userText} />
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          }
+          if (!cleaned.userText) return null; // nothing renderable -> no empty bubble
+          return (
+            <div key={m.id} className={`bubble user${m.local ? ' pending' : ''}`}>
+              <div className="user-text">
+                <Markdown text={cleaned.userText} />
+              </div>
+            </div>
+          );
         })}
         {status?.busy && (
           <div className="typing">
@@ -470,6 +478,7 @@ export function SessionDetail({
       <footer className="composer">
         <textarea
           value={input}
+          aria-label="输入消息"
           placeholder={status?.busy ? '会话运行中，输入将插队（steer）…' : '输入消息…'}
           rows={1}
           onChange={(e) => setInput(e.target.value)}

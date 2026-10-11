@@ -67,6 +67,24 @@ function StatusBadge({ status }: { status: ActivityStatus | undefined }) {
   return null;
 }
 
+function FolderIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="18"
+      height="18"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M3.5 6.5a2 2 0 0 1 2-2h3.6l2 2.2h7.4a2 2 0 0 1 2 2v8.3a2 2 0 0 1-2 2H5.5a2 2 0 0 1-2-2V6.5z" />
+    </svg>
+  );
+}
+
 export function SessionList({
   remote,
   ws,
@@ -160,44 +178,51 @@ export function SessionList({
         )}
         {groups.map((g) => {
           const isCollapsed = collapsed[g.key] === true;
+          const updated = relTime(g.latestAt);
           return (
-            <section key={g.key} className="ws-group">
-              <div className="ws-group-head">
+            <section key={g.key} className="ws-card">
+              <div className="ws-card-head">
                 <button
-                  className="ws-group-toggle"
+                  className="ws-card-toggle"
                   onClick={() => setCollapsed((prev) => ({ ...prev, [g.key]: !isCollapsed }))}
                 >
-                  <span className={`chevron${isCollapsed ? ' closed' : ''}`}>▾</span>
+                  <span className="ws-icon">
+                    <FolderIcon />
+                  </span>
                   <span className="ws-name ellipsis">{g.name}</span>
-                  <span className="ws-count">{g.sessions.length}</span>
+                  <span className="pill outline">本地</span>
+                  <span className="ws-count">{g.sessions.length} 个任务</span>
+                  <span className={`chevron${isCollapsed ? ' closed' : ''}`}>▾</span>
                 </button>
                 <button
-                  className="btn icon"
+                  className="btn icon ws-add"
                   title={`在 ${g.cwd} 新建会话`}
+                  aria-label={`在 ${g.name} 新建会话`}
                   disabled={creatingKey === g.key}
                   onClick={() => void createInGroup(g)}
                 >
                   {creatingKey === g.key ? '…' : '+'}
                 </button>
               </div>
-              <div className="ws-cwd ellipsis">{g.cwd}</div>
-              {!isCollapsed &&
-                g.sessions.map((s) => (
-                  <button
-                    key={s.id}
-                    className="session-card"
-                    onClick={() => onOpen(s.id, s.meta?.title || '未命名会话')}
-                  >
-                    <div className="row1">
-                      <span className="s-title">{s.meta?.title || '未命名会话'}</span>
+              <div className="ws-card-sub">
+                <span className="ws-cwd ellipsis">{g.cwd}</span>
+                {updated && <span className="ws-updated">更新于 {updated}</span>}
+              </div>
+              {!isCollapsed && g.sessions.length > 0 && (
+                <div className="ws-sessions">
+                  {g.sessions.map((s) => (
+                    <button
+                      key={s.id}
+                      className="ws-session"
+                      onClick={() => onOpen(s.id, s.meta?.title || '未命名会话')}
+                    >
+                      <span className="ws-session-title ellipsis">{s.meta?.title || '未命名会话'}</span>
+                      <span className="ws-session-time">{relTime(s.meta?.updated_at)}</span>
                       <StatusBadge status={s.activity?.status} />
-                    </div>
-                    <div className="row2">
-                      <span className="s-sub">{s.meta?.last_prompt ?? ''}</span>
-                      <span className="s-time">{relTime(s.meta?.updated_at)}</span>
-                    </div>
-                  </button>
-                ))}
+                    </button>
+                  ))}
+                </div>
+              )}
             </section>
           );
         })}

@@ -19,7 +19,8 @@
     "verify:e2e": "node packages/bridge/dist/verify/e2e.js",
     "verify:ws": "node packages/bridge/dist/verify/ws.js",
     "verify:tunnel": "node packages/bridge/dist/verify/tunnel.js",
-    "verify:ux": "node packages/bridge/dist/verify/ux.js"
+    "verify:ux": "node packages/bridge/dist/verify/ux.js",
+    "verify:pwa": "node scripts/verify-pwa.mjs"
   },
   "engines": {
     "node": ">=20"
