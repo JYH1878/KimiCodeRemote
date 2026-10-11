@@ -27,7 +27,7 @@ async function api(method, path, body) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-const cwd = process.argv[2] || mkdtempSync(join(tmpdir(), 'kimi-remote-probe-'));
+const cwd = process.argv[2] || mkdtempSync(join(tmpdir(), 'kimicoderemote-probe-'));
 console.log('cwd =', cwd);
 
 // 1. list sessions
@@ -38,7 +38,7 @@ console.log('first item keys:', first && Object.keys(first));
 if (first) console.log('first item sample:', JSON.stringify(first).slice(0, 400));
 
 // 2. create temp session
-const created = await api('POST', '/api/v1/sessions', { title: 'kimi-remote-probe', metadata: { cwd } });
+const created = await api('POST', '/api/v1/sessions', { title: 'kimicoderemote-probe', metadata: { cwd } });
 console.log('create status', created.status, 'code', created.json?.code);
 const sid = created.json?.data?.id;
 console.log('session id len', sid?.length);

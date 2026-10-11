@@ -75,7 +75,7 @@ export function finish(): never {
 }
 
 export function createTempWorkspace(): string {
-  return mkdtempSync(join(tmpdir(), 'kimi-remote-verify-'));
+  return mkdtempSync(join(tmpdir(), 'kimicoderemote-verify-'));
 }
 
 export function removeTempWorkspace(dir: string): void {
@@ -110,7 +110,7 @@ export interface VerifySession {
 export async function createVerifySession(box: BoxClient): Promise<VerifySession> {
   const cwd = createTempWorkspace();
   const created = await box.call('POST', '/api/v1/sessions', {
-    title: 'kimi-remote-verify',
+    title: 'kimicoderemote-verify',
     metadata: { cwd },
   });
   const payload = created.body as { code?: number; data?: { id?: string } } | undefined;

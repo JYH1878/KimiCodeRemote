@@ -3,7 +3,7 @@ export function Pairing({ invalid }: { invalid?: boolean }) {
     <div className="pairing">
       <div className="pairing-card">
         <div className="logo">K</div>
-        <h1>kimi-remote</h1>
+        <h1>KimiCodeRemote</h1>
         <p className="muted">手机远控电脑上的 Kimi Code 桌面版</p>
         {invalid && (
           <p className="error-note">钥匙无效（应为 32 字节 base64url），已清除本地存储。请重新扫码配对。</p>

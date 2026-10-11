@@ -21,6 +21,6 @@ function run(name, cmd, args, color) {
   procs.push(p);
 }
 
-console.log('kimi-remote dev: bridge on :7777, vite on :5183 (open http://localhost:5183)');
+console.log('KimiCodeRemote dev: bridge on :7777, vite on :5183 (open http://localhost:5183)');
 run('bridge', 'npm', ['run', 'dev:bridge'], '36');
 run('vite', 'npm', ['run', 'dev:pwa'], '35');

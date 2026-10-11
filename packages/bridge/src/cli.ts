@@ -1,4 +1,4 @@
-// kimi-remote bridge CLI. One command to pair your phone:
+// KimiCodeRemote bridge CLI. One command to pair your phone:
 //   npm start            (or: node packages/bridge/dist/cli.js)
 //   npm run start:bg     hidden-window background mode (see scripts/start-bg.mjs)
 // Prints the public (tunnel) pairing URL + QR; the key rides in the #k=
@@ -27,7 +27,7 @@ function parseArgs(argv: string[]): { port: number; tunnel: boolean } {
     else if (a === '--no-tunnel') tunnel = false;
     else if (a === '--tunnel') tunnel = true;
     else if (a === '--help' || a === '-h') {
-      console.log('usage: kimi-remote-bridge [--port 7777] [--no-tunnel]');
+      console.log('usage: kimicoderemote-bridge [--port 7777] [--no-tunnel]');
       console.log('background mode: npm run start:bg / stop / pair');
       process.exit(0);
     }
@@ -51,7 +51,7 @@ async function printQr(label: string, url: string): Promise<void> {
 async function main(): Promise<void> {
   const { port, tunnel } = parseArgs(process.argv);
   const startedAt = Date.now();
-  console.log('kimi-remote bridge');
+  console.log('KimiCodeRemote bridge');
   console.log(`pairing key file: ${KEY_FILE} (delete it to rotate the key)`);
   const key = loadOrCreateKey(KEY_FILE);
   if (key.length !== 32) process.exit(1); // paranoia; loadOrCreateKey already validates

@@ -236,7 +236,7 @@ export class WsBridge {
           JSON.stringify({
             type: 'client_hello',
             id: 'hello',
-            payload: { client_id: `kimi-remote-${randomUUID()}` },
+            payload: { client_id: `kimicoderemote-${randomUUID()}` },
           }),
         );
       });

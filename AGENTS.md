@@ -1,4 +1,4 @@
-# AGENTS.md — kimi-remote
+# AGENTS.md — KimiCodeRemote
 
 ## 定位
 手机远控 Kimi Code 桌面版的独立软件：电脑端 bridge + 手机端 PWA，AES-256-GCM 端到端加密，经 cloudflared 快速隧道任意网络可达。调研依据见 REPORT.md。

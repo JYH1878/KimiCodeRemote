@@ -1,4 +1,4 @@
-// kimi-remote PWA entry: pairing key from URL hash (#k=...) or localStorage.
+// KimiCodeRemote PWA entry: pairing key from URL hash (#k=...) or localStorage.
 import { useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { keyFromB64url } from './crypto.js';
