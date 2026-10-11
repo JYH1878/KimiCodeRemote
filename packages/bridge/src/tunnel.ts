@@ -204,7 +204,10 @@ export function startTunnel(
         // a named tunnel serves a fixed hostname; readiness = edge connections
         if (/Registered tunnel connection/i.test(line)) finish(`https://${named.hostname}`);
       } else {
-        const m = line.match(/https:\/\/[a-z0-9][a-z0-9-]*\.trycloudflare\.com/i);
+        // quick-tunnel hostnames are multi-word ("word-word-word-word");
+        // cloudflared also logs https://api.trycloudflare.com (its API
+        // endpoint) before the real URL - single-label hosts don't count
+        const m = line.match(/https:\/\/[a-z0-9]+(?:-[a-z0-9]+)+\.trycloudflare\.com/i);
         if (m) finish(m[0]);
       }
     };
