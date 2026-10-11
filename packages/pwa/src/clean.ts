@@ -78,8 +78,21 @@ function stripActivationEnvelope(text: string): string {
   return stripHarnessNoise(
     text
       .replace(/<skill-loaded\b[\s\S]*?<\/skill-loaded>/g, '')
-      .replace(/User activated the skill "[^"]*"\..*?(\n|$)/g, ''),
+      .replace(/User activated the skill "[^"]*"\..*?(\n|$)/g, '')
+      .replace(/Skill tool loaded instructions[^\n]*(\n|$)/g, ''),
   );
+}
+
+// composer artifact: trailing "Attached image file: <path>" lines are
+// attachment serialization noise, not user words
+function stripTrailingAttachedLines(text: string): string {
+  const lines = text.split('\n');
+  while (lines.length > 0) {
+    const last = (lines[lines.length - 1] ?? '').trim();
+    if (last === '' || /^Attached (image|file)(\sfile)?:/i.test(last)) lines.pop();
+    else break;
+  }
+  return lines.join('\n').trim();
 }
 
 const EXCERPT_MAX = 600;
@@ -108,8 +121,14 @@ export function cleanUserMessage(m: Message): CleanedUserMessage {
     userText = d;
   }
   if (!userText) userText = stripActivationEnvelope(rawBody);
+  userText = stripTrailingAttachedLines(userText);
   // safety: the instruction envelope must never surface as the user's words
-  if (userText.includes('skill-loaded') || userText.includes('User activated the skill')) {
+  // (model-triggered loads carry no user words -> they clean to '')
+  if (
+    userText.includes('skill-loaded') ||
+    userText.includes('User activated the skill') ||
+    userText.includes('Skill tool loaded instructions')
+  ) {
     userText = '';
   }
   return { skillName, userText, rawText: skillExcerpt(rawBody) };

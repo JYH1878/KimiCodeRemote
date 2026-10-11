@@ -142,7 +142,6 @@
 4. 遗留：管理者手机视口终验（完成条件 2）。
 
 ### 12. 热修：微信内手机返回直接退出网页（2026-10-11，领导实测反馈）
-
 **原因**：SPA 无路由，「列表→会话」只是 `Shell.tsx` 的 React state 切换，浏览器历史栈始终只有一条记录；手机返回键/微信左滑手势 = 浏览器后退，无处可退 → webview 直接关闭。
 
 **修复（只动 `Shell.tsx`）**
@@ -151,3 +150,21 @@
 - 界面「‹ 返回」按钮改走 `history.back()`（state 匹配时）保持栈一致，失配兜底直接 setOpenId(null)。
 
 **实测闭环（桌面浏览器 390×844）**：进会话（canGoBack:true）→ go_back 回列表（栈底，再退才退出）→ go_forward 正确恢复同一会话 → 界面「‹ 返回」回列表 ✓。回归：build ✅、verify:pwa ✅、verify:ux ✅。
+
+### 13. 迭代三管理者验收（2026-10-11，领导会话亲验）
+
+**明卷（管理者本人复跑，非执行者自述）**
+- build ✅；verify:pwa ✅（21 项）；verify:discovery ✅；verify:e2e ✅ 14 项；verify:ws ✅ 4 项；verify:ux ✅ 16 项全 PASS（脚本与迭代二同版未动，计数差为环境性）；verify:tunnel ✅（12 次重试后通，已知本机 DNS 间歇劣化）。
+
+**暗卷（执行者看不见的三条抽查）**
+1. 跨会话抽查（非取证会话 ×3、425 条消息）：**抓出真问题**——model 触发的 skill 加载（trigger=model-tool，无 skillArgs）会把包裹行 "Skill tool loaded instructions for this request. Follow them." 当用户原话显示（正是领导截图吐槽的气泡来源）❌→ 验收中修复 ✅
+2. 卫生：旧绿 #18e299/#245641 全仓零残留；.kimi-remote.json 未被 git 追踪；配对钥匙在 git 全历史/logs/dist 零出现 ✅
+3. 桌面浏览器 390×844 实测：列表页工作区卡片（图标/「本地」胶囊/N 个任务/+/副行/状态胶囊/发丝线）✓；本会话 skill 消息=「✨ skill「leader」」小条（点击展开 args+说明书摘要，可收起）+ 用户原话右侧深色卡片 ✓；injection（date_change/tools_added）消息不可见 ✓；助手全宽平铺、thinking/工具折叠 ✓；无绿色残留 ✓
+
+**验收中修复（管理者动手，含于本节后一次提交）**
+- scripts/verify-pwa.mjs：①翻页健壮化——取证会话是活会话，持续增长会把最早消息顶出 page_size=50 首页（首跑复跑即因此 FAIL），改为 before_id 翻全量历史（20 页防御）；②新增第二真实会话（session_253c9bc3…）断言：model 触发的 skill 清洗后 userText 必须为空、user-slash 的保留原话且无附件噪音；③结尾 process.exit → process.exitCode——node fetch 长连接在强退时触发 Windows libuv 断言致 exit 127（假红），改后 exit 0 且 2 秒自然退出。
+- packages/pwa/src/clean.ts：剥 "Skill tool loaded instructions…" 包裹行（含安全网拦截）；剥尾部 "Attached image file: <路径>" 附件序列化噪音行。
+- 已知残留（不影响验收）：个别老会话 skillArgs 里**行中**的 "Attached image file: <本地路径>" 不剥（仅剥尾部行），仅影响老消息美观。
+- 经验：自动化面板后台标签页会节流渲染，点击看似「没反应」实为状态未提交；切前台后一切正常——非应用缺陷。
+
+**结论：迭代三通过验收（完成条件 1、2 均达成）。**

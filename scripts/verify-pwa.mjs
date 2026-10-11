@@ -47,14 +47,39 @@ try {
     .sort((a, b) => (b.heartbeat_at ?? 0) - (a.heartbeat_at ?? 0))[0];
   check('desktop server instance discovered', !!instance?.port);
 
-  // 3. pull the real forensic session
-  const res = await fetch(
-    `http://127.0.0.1:${instance.port}/api/v1/sessions/${SESSION}/messages?page_size=50`,
-    { headers: { authorization: `Bearer ${token}` } },
+  // 3. pull real sessions - FULL history (the API pages newest -> oldest and
+  // these sessions keep growing, so a single newest page eventually scrolls
+  // the early forensic messages off the end; page back with before_id).
+  async function fetchAll(sid) {
+    const out = [];
+    let before;
+    let status = 0;
+    let code = -1;
+    for (let page = 0; page < 20; page++) {
+      const q = new URLSearchParams({ page_size: '100' });
+      if (before) q.set('before_id', before);
+      const res = await fetch(
+        `http://127.0.0.1:${instance.port}/api/v1/sessions/${sid}/messages?${q}`,
+        { headers: { authorization: `Bearer ${token}` } },
+      );
+      status = res.status;
+      const payload = await res.json();
+      code = payload?.code ?? -1;
+      if (status !== 200 || code !== 0) break;
+      const batch = payload?.data?.items ?? [];
+      out.push(...batch);
+      if (payload?.data?.has_more !== true || batch.length === 0) break;
+      before = batch[batch.length - 1]?.id;
+      if (!before) break;
+    }
+    return { items: out, status, code };
+  }
+  const forensic = await fetchAll(SESSION);
+  const items = forensic.items;
+  check(
+    `forensic session fetched (${items.length} messages, full history)`,
+    forensic.status === 200 && forensic.code === 0 && items.length > 0,
   );
-  const payload = await res.json();
-  const items = payload?.data?.items ?? [];
-  check(`forensic session fetched (${items.length} messages)`, res.status === 200 && payload?.code === 0 && items.length > 0);
 
   // 4. every message classifies without throwing, into a known class
   const CLASSES = new Set(['hidden', 'assistant', 'user', 'skill']);
@@ -131,6 +156,42 @@ try {
     `assistant messages pass through (found ${assistants.length})`,
     assistants.length > 0 && assistants.every((m) => clean.classifyMessage(m) === 'assistant'),
   );
+
+  // 12. second real session: model-triggered skill loads carry NO user words
+  //     (envelope line "Skill tool loaded instructions…" must not leak as a
+  //     user bubble); user-slash skills keep their typed words.
+  const SECOND = 'session_253c9bc3-99dd-47fc-9fef-2a4b21f7305b';
+  const second = await fetchAll(SECOND);
+  const modelTriggered = second.items.filter(
+    (m) => m.metadata?.origin?.kind === 'skill_activation' && m.metadata?.origin?.trigger === 'model-tool',
+  );
+  check(
+    `second session fetched, model-triggered skills present (found ${modelTriggered.length})`,
+    second.status === 200 && second.code === 0 && modelTriggered.length >= 1,
+  );
+  check(
+    'model-triggered skill loads leave no fake user words',
+    modelTriggered.length > 0 &&
+      modelTriggered.every((m) => {
+        const c = clean.cleanUserMessage(m);
+        return c.skillName !== '' && c.userText === '';
+      }),
+  );
+  const slashSkill = second.items.find(
+    (m) => m.metadata?.origin?.kind === 'skill_activation' && m.metadata?.origin?.trigger === 'user-slash',
+  );
+  check(
+    'user-slash skill keeps typed words, no envelope/attachment noise',
+    !!slashSkill &&
+      (() => {
+        const c = clean.cleanUserMessage(slashSkill);
+        return (
+          c.userText.length > 0 &&
+          !c.userText.includes('skill-loaded') &&
+          !c.userText.includes('Attached image file')
+        );
+      })(),
+  );
 } catch (e) {
   check(`fatal: ${e.message}`, false);
 } finally {
@@ -138,4 +199,8 @@ try {
 }
 
 console.log(failed === 0 ? 'verify:pwa OK' : `verify:pwa FAILED (${failed})`);
-process.exit(failed === 0 ? 0 : 1);
+// let the loop drain instead of process.exit(): fetch keep-alive sockets are
+// still open at this point and a forced exit trips a libuv assertion on
+// Windows (exit code 127 despite all checks passing). Sockets time out in a
+// few seconds and the process then exits on its own with this code.
+process.exitCode = failed === 0 ? 0 : 1;
