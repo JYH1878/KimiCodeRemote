@@ -1,18 +1,86 @@
 // Cloudflared quick-tunnel integration (free, no account). Downloads the
-// official Windows binary on first run, then spawns `cloudflared tunnel
+// official binary for the host platform on first run (Windows: raw .exe;
+// macOS: .tgz unpacked in pure JS), then spawns `cloudflared tunnel
 // --url http://127.0.0.1:<port>` and parses the trycloudflare URL. The tunnel
 // only ever carries ciphertext; Cloudflare can see timing and sizes at most.
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve, sep } from 'node:path';
+import { gunzipSync } from 'node:zlib';
 import { BIN_DIR } from './config.js';
 
-const DOWNLOAD_URL =
-  'https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe';
+const RELEASE_BASE = 'https://github.com/cloudflare/cloudflared/releases/latest/download/';
 
 // SSRF guard for the download itself: only https to GitHub hosts.
 const ALLOWED_DOWNLOAD_HOSTS =
   /^https:\/\/([a-z0-9-]+\.)*(github\.com|githubusercontent\.com)\//i;
+
+// Which release asset fits this platform/arch (official asset names).
+export function downloadTarget(platform: string, arch: string): string {
+  if (platform === 'win32') return `${RELEASE_BASE}cloudflared-windows-amd64.exe`;
+  if (platform === 'darwin' && arch === 'x64') return `${RELEASE_BASE}cloudflared-darwin-amd64.tgz`;
+  if (platform === 'darwin' && arch === 'arm64') return `${RELEASE_BASE}cloudflared-darwin-arm64.tgz`;
+  throw new Error(`unsupported platform: ${platform}-${arch} (cloudflared is fetched for Windows and macOS only)`);
+}
+
+// NUL-terminated string at [start, end) of a header/data block.
+function cstr(buf: Buffer, start: number, end: number): string {
+  const slice = buf.subarray(start, end);
+  const nul = slice.indexOf(0);
+  return slice.toString('utf8', 0, nul === -1 ? slice.length : nul);
+}
+
+// Tar size field (offset 124, 12 bytes): octal ASCII, or GNU base-256 when
+// the high bit of the first byte is set.
+function tarSize(header: Buffer): number {
+  const first = header.readUInt8(124);
+  if ((first & 0x80) !== 0) {
+    let value = first & 0x7f;
+    for (let i = 125; i < 136; i++) value = value * 256 + header.readUInt8(i);
+    return value;
+  }
+  const octal = header.toString('ascii', 124, 136).replace(/\0.*$/, '').trim();
+  return octal ? parseInt(octal, 8) : 0;
+}
+
+// Minimal USTAR/GNU tar reader over a memory buffer: 512-byte header blocks,
+// data blocks stepped over with alignment kept. GNU 'L' longname blocks set
+// the next entry's name; pax 'x'/'g' extension blocks are skipped. Returns
+// the contents of the named regular file (matched by full path or basename).
+export function extractTarEntry(tar: Buffer, entryName: string): Buffer {
+  let longName: string | null = null;
+  let offset = 0;
+  while (offset + 512 <= tar.length) {
+    const header = tar.subarray(offset, offset + 512);
+    if (header.every((b) => b === 0)) break; // end-of-archive padding block
+    const size = tarSize(header);
+    if (!Number.isFinite(size) || size < 0) throw new Error('tar: invalid size field');
+    const dataStart = offset + 512;
+    const data = tar.subarray(dataStart, Math.min(dataStart + size, tar.length));
+    const type = header.readUInt8(156);
+    const name = longName ?? cstr(header, 0, 100);
+    longName = null;
+    offset = dataStart + Math.ceil(size / 512) * 512;
+    if (type === 0x4c) {
+      longName = cstr(data, 0, data.length); // 'L': name of the next entry
+    } else if (type === 0x30 || type === 0x00) {
+      if (name === entryName || name.endsWith(`/${entryName}`)) return data;
+    }
+    // 'x'/'g' pax headers, dirs, links etc: skipped, alignment preserved
+  }
+  throw new Error(`tar: entry "${entryName}" not found`);
+}
+
+// macOS release asset: gzip + tar wrapping a single `cloudflared` binary.
+// Unpacked in pure JS (no system tar, no new dependency) and written
+// executable next to the other platform binaries.
+export function extractCloudflaredFromTgz(tgz: Buffer, binPath: string): string {
+  const bin = extractTarEntry(gunzipSync(tgz), 'cloudflared');
+  if (bin.length < 1_000_000) throw new Error('extracted binary suspiciously small, aborting');
+  mkdirSync(dirname(binPath), { recursive: true });
+  writeFileSync(binPath, bin, { mode: 0o755 });
+  return binPath;
+}
 
 export async function ensureCloudflared(
   binPath: string,
@@ -20,17 +88,23 @@ export async function ensureCloudflared(
 ): Promise<string> {
   if (existsSync(binPath)) return binPath;
   mkdirSync(dirname(binPath), { recursive: true });
-  log(`downloading cloudflared from ${DOWNLOAD_URL} ...`);
-  const res = await fetch(DOWNLOAD_URL, { redirect: 'follow', signal: AbortSignal.timeout(600_000) });
-  const finalUrl = res.url || DOWNLOAD_URL;
+  const url = downloadTarget(process.platform, process.arch);
+  log(`downloading cloudflared from ${url} ...`);
+  const res = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(600_000) });
+  const finalUrl = res.url || url;
   if (!ALLOWED_DOWNLOAD_HOSTS.test(finalUrl)) {
     throw new Error(`download redirected to untrusted host: ${new URL(finalUrl).host}`);
   }
   if (!res.ok) throw new Error(`download failed: HTTP ${res.status}`);
   const buf = Buffer.from(await res.arrayBuffer());
   if (buf.length < 1_000_000) throw new Error('downloaded binary suspiciously small, aborting');
-  writeFileSync(binPath, buf, { mode: 0o755 });
-  log(`cloudflared saved to ${binPath} (${(buf.length / 1e6).toFixed(1)} MB)`);
+  if (url.endsWith('.tgz')) {
+    extractCloudflaredFromTgz(buf, binPath);
+    log(`cloudflared extracted to ${binPath} (${(buf.length / 1e6).toFixed(1)} MB tgz)`);
+  } else {
+    writeFileSync(binPath, buf, { mode: 0o755 });
+    log(`cloudflared saved to ${binPath} (${(buf.length / 1e6).toFixed(1)} MB)`);
+  }
   return binPath;
 }
 
