@@ -14,7 +14,7 @@
 | 1 | 官方有没有桌面版远控？ | **现在没有，但正在开发**——桌面版文档/changelog 全无远控；官方 Collaborator 的草稿 PR #4169「桌面端原生管理远控设备」2026-10-10 提交（昨天）。【查证】 |
 | 2 | 第三方有谁在做？ | 6+ 个产品支持 Kimi Code **CLI**（Paseo、hapi、QuickTUI、metabot、Pocket、SezSab/kimi-remote 等），**无一支持桌面版**。【查证】 |
 | 3 | 热度/空白？ | CLI 远控生态很热（Paseo 20,381★、Happy 24,080★、hapi 5,211★、metabot 994★，GitHub API 现查）；「Kimi Code 桌面版专属远控」细分**是空白**。【查证】 |
-| 4 | 能不能做？ | **能**——桌面版在本机 127.0.0.1:54754 内嵌完整 kimi web server（/api/v1/* bearer 鉴权），实例注册表 `~/.kimi-code/server/instances/*.json` 可自动发现端口，官方有 Server API 文档。路线排序：a) 对接桌面版本地接口 > b) 桥接 CLI > c) 独立软件终端中转。【实测+查证】 |
+| 4 | 能不能做？ | **能**——桌面版在本机 127.0.0.1:54754（端口为本机实测值，每台机器不同）内嵌完整 kimi web server（/api/v1/* bearer 鉴权），实例注册表 `~/.kimi-code/server/instances/*.json` 可自动发现端口，官方有 Server API 文档。路线排序：a) 对接桌面版本地接口 > b) 桥接 CLI > c) 独立软件终端中转。【实测+查证】 |
 | 5 | 前景？ | **有条件值得做**：官方下场风险高（PR #4169 + Kimi Work 已有同款），但官方方案必走付费会员+官方中继，「免会员/自托管/局域网直连」空间已被 CLI 侧验证（Paseo 在 kimi rc 存在下长到 2 万★）。窗口期估计数月。【推测，依据查证】 |
 | 6 | 做什么形态？ | **推荐**：电脑端 bridge + 手机端 PWA（后做原生安卓）的独立软件，对接桌面版内嵌 Server API；**备选**：零开发/轻量反代（Tailscale 或反代 127.0.0.1:54754 到局域网）保底自用。skill/MCP/插件形态被实测否决。 |
 
@@ -33,7 +33,7 @@
 ### 1.2 `kimi rc` 不能接管桌面版会话 【查证+实测；部分推测】
 
 - `kimi rc`（=`kimi remote`=`kimi web --remote-control`；会话内 `/remote-control`）是 **CLI 的前台进程**，把手机经 Kimi 中继（`code-rc.kimi.com` / `code-rc.kimi.ai`）接到**它自己启动的那个 CLI server** 上；付费会员专属、每账号约 3 台设备、单机单实例（锁文件 `~/.kimi-code/server/rc.json`）、只绑 loopback 且不支持 `--host`。证据：[Remote Control 官方文档](https://www.kimi.com/code/docs/en/kimi-code-cli/guides/remote-control.html)（2026-10-10 抓取原文）。
-- 【实测】本机桌面版正在运行（7 个 `Kimi Code.exe` 进程），但 `~/.kimi-code/server/` 下**不存在 rc.json**，且 `server/instances/*.json` 注册的实例 pid=32072 正是桌面版进程（`"pid":32072,"port":54754,"host_version":"2.1.1"`）——即桌面版走的是自己的内嵌 server 实例，`kimi rc` 的中继机制属于 CLI 进程，二者不共享入口。
+- 【实测】本机桌面版正在运行（7 个 `Kimi Code.exe` 进程），但 `~/.kimi-code/server/` 下**不存在 rc.json**，且 `server/instances/*.json` 注册的实例 pid 正是桌面版进程（`"pid":<桌面版进程PID>,"port":54754,"host_version":"2.1.1"`，pid 为本机实测值已隐去）——即桌面版走的是自己的内嵌 server 实例，`kimi rc` 的中继机制属于 CLI 进程，二者不共享入口。
 - 【推测/未验证】桌面版与 CLI 共享 `sessions/` 目录且格式同源（桌面版 server 的 host_version 就是 CLI 版本 2.1.1），理论上 CLI 在同一 workspace 启动 `kimi web/rc` 可能列出桌面版创建的会话。本次受只读约束（启动 rc 会写锁文件）未做实验，**官方文档也没有「rc 接管桌面会话」的任何说法**，按现状应视为不能。
 
 ### 1.3 Kimi Work 远控与 Kimi Code 的关系 【查证】
@@ -116,9 +116,9 @@ drwxr-xr-x 1 JYH 197121          0 Sep 25 03:14 resources
 
 ### 4.2 进程与端口：桌面版内嵌 HTTP server 监听两个本地端口 【实测】
 
-`Get-Process` 输出：7 个 `Kimi Code.exe`（PID 2712/5808/13880/29716/32072/33392/39740，路径均为 `D:\SoftWares\Kimi Code\Kimi Code.exe`）→ Electron 多进程形态。
+`Get-Process` 输出：7 个 `Kimi Code.exe`（路径均为 `D:\SoftWares\Kimi Code\Kimi Code.exe`，PID 列表为本机实测值，已隐去）→ Electron 多进程形态。
 
-`netstat -ano -p tcp` 中 PID 32072 监听 `127.0.0.1:54751` 与 `127.0.0.1:54754`（其余监听端口经 PID 反查分属 QQ/Weixin/DingTalk 等无关进程）。只读 HTTP 探测输出摘录：
+`netstat -ano -p tcp` 中桌面版主进程（PID 与实例注册表所记一致）监听 `127.0.0.1:54751` 与 `127.0.0.1:54754`（其余监听端口经 PID 反查均属本机其他无关应用）。只读 HTTP 探测输出摘录：
 
 ```
 $ curl -s -i http://127.0.0.1:54754/        → HTTP/1.1 200 OK, content-length: 3041
@@ -139,7 +139,7 @@ $ curl -s -i http://127.0.0.1:54751/          → 404 not found（各路径均 4
 ~/.kimi-code/
 ├── server/
 │   ├── events/          # __global__.jsonl + session_*.jsonl（9 个会话事件流）
-│   └── instances/       # 01M4K3ZK5PJ7M1YP8YCMQBM8CR.json（1 个活跃实例）
+│   └── instances/       # <实例标识>.json（1 个活跃实例）
 ├── server.token         # 43 字节，存在，未读取
 ├── sessions/            # wd_* 每工作区一个目录
 ├── workspaces.json, session_index.jsonl, mcp.json, credentials/, plugins/managed/ ...
@@ -149,7 +149,7 @@ $ curl -s -i http://127.0.0.1:54751/          → 404 not found（各路径均 4
 `instances/*.json` 仅提取字段名与非敏感值（`grep -o` 键名）：
 
 ```
-"server_id":"01M4K3ZK5PJ7M1YP8YCMQBM8CR"  "pid":32072  "port":54754  "host_version":"2.1.1"
+"server_id":"<本机实例标识，已隐去>"  "pid":<桌面版进程PID，已隐去>  "port":54754  "host_version":"2.1.1"
 （字段全集：server_id / pid / port / host / host_version / started_at / heartbeat_at）
 ```
 
