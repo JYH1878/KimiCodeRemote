@@ -6,7 +6,7 @@
 ## 怎么跑
 - 前提：Kimi Code 桌面版正在运行（bridge 读 `~/.kimi-code/server/instances/*.json` 自动发现其内嵌 server 端口）。
 - 启动：`npm install && npm start`（前台打印配对地址+二维码），或 `npm run start:bg`（无窗口后台）+ `npm run pair`（看配对地址）+ `npm run stop`（优雅停止）。
-- 验收：`npm run build`、`npm run verify:discovery|e2e|ws|tunnel|ux`，全绿才算完。
+- 验收：`npm run build`、`npm run verify:discovery|e2e|ws|tunnel|ux|pwa`，全绿才算完。
 - 新会话接手先读 HANDOFF.md（本机内部文件，已 gitignore 不入库）。
 
 ## 技术栈
@@ -25,5 +25,5 @@
 - git 只本地 commit，不 push。
 
 ## 当前状态与下一步
-- 2026-10-11 MVP 验收通过（验收命令全绿 + 手机 4G 人工实测通过）；同日迭代二验收通过：消息流修复、会话按工作区分组、无窗口后台运行（start:bg/stop/pair + 桌面退出跟随 + 可选命名隧道）。
+- 2026-10-11 同日三轮验收通过：MVP（验收命令全绿 + 手机 4G 人工实测通过）；迭代二：消息流修复、会话按工作区分组、无窗口后台运行（start:bg/stop/pair + 桌面退出跟随 + 可选命名隧道）；迭代三：消息流净化（skill 加载信息正确归类，不再冒充用户消息）、ZCode 风卡片界面、Kimi 深蓝黑+亮蓝配色。
 - 在途任务：无。候选迭代见 HANDOFF.md「正在推进的任务」。

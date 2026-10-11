@@ -108,6 +108,7 @@ bin/cloudflared.exe tunnel route dns kimi-remote kimi.example.com # 绑定你的
 | `npm run verify:ws` | 加密 WS 订阅→发 prompt→30s 内收到流式事件 |
 | `npm run verify:tunnel` | 公网隧道 `/healthz` 200（失败降级验证 loopback 并提示记录） |
 | `npm run verify:ux` | 消息流分页语义 + 工作区分组字段（临时会话发 2 条消息实测） |
+| `npm run verify:pwa` | PWA 消息清洗断言（直连桌面 server 只读拉取真实会话取证） |
 
 ## 目录
 
