@@ -1,7 +1,8 @@
 // kimi-remote bridge CLI. One command to pair your phone:
 //   npm start            (or: node packages/bridge/dist/cli.js)
-// Prints LAN + public pairing URLs (with the key in the #k= fragment) and QR
-// codes. The key never appears in logs beyond this intentional pairing print.
+// Prints the public (tunnel) pairing URL + QR; the key rides in the #k=
+// fragment. LAN addresses print only as fallback when the tunnel is
+// unavailable. The key never appears in logs beyond this pairing print.
 import { loadOrCreateKey, readKeyString } from './crypto.js';
 import { startBridge } from './server.js';
 import { DEFAULT_PORT, KEY_FILE } from './config.js';
@@ -48,24 +49,22 @@ async function main(): Promise<void> {
   const keyStr = readKeyString(KEY_FILE);
   const fragment = `#k=${keyStr}`;
 
-  const lans = lanAddresses().map((ip) => `http://${ip}:${bridge.port}/${fragment}`);
-  if (lans.length === 0) {
-    console.log(`\nLAN: no routable IPv4 found - use http://localhost:${bridge.port}/${fragment}`);
-  }
-  for (const [i, url] of lans.entries()) {
-    await printQr(i === 0 ? 'LAN pairing URL (scan with phone)' : 'LAN pairing URL (alternate)', url);
-    if (i === 0) break; // one QR for the primary LAN address is enough
-  }
-  for (const url of lans.slice(1)) console.log(`also: ${url}`);
-
   bridge.tunnelReady.then(async (url) => {
     if (url) {
-      await printQr('PUBLIC pairing URL (works on 4G)', `${url}/${fragment}`);
+      await printQr('PUBLIC pairing URL (works on any network)', `${url}/${fragment}`);
       console.log('note: quick-tunnel URLs change on every bridge restart.');
       console.log('the tunnel carries ciphertext only.');
-    } else {
-      console.log('\nPUBLIC URL: unavailable (see log above) - LAN-only mode.');
+      return;
     }
+    console.log('\nPUBLIC URL: unavailable (see log above) - LAN-only fallback.');
+    const lans = lanAddresses().map((ip) => `http://${ip}:${bridge.port}/${fragment}`);
+    const first = lans[0];
+    if (!first) {
+      console.log(`LAN: no routable IPv4 found - use http://localhost:${bridge.port}/${fragment}`);
+      return;
+    }
+    await printQr('LAN pairing URL (fallback)', first);
+    for (const u of lans.slice(1)) console.log(`also: ${u}`);
   });
 
   const bye = () => {

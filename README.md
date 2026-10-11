@@ -12,17 +12,15 @@ npm install
 npm start
 ```
 
-终端会打印：
+终端会打印**公网配对地址 + 二维码**（cloudflared 快速隧道，免账号；首次自动下载 Windows 二进制到 `bin/`）。
 
-- 局域网配对地址 + 二维码
-- 公网配对地址 + 二维码（cloudflared 快速隧道，免账号；首次自动下载 Windows 二进制到 `bin/`）
-
-手机（任意网络）**扫码或打开配对地址**即可，形如：
+手机（任意网络，4G 也行）**扫码或打开配对地址**即可，形如：
 
 ```
-http://192.168.x.x:7777/#k=<钥匙>          # 局域网
-https://xxxx.trycloudflare.com/#k=<钥匙>   # 公网（4G 可用）
+https://xxxx.trycloudflare.com/#k=<钥匙>
 ```
+
+隧道不可用时会降级打印局域网配对地址兜底。
 
 `#k=` 后面就是全部凭证。前提：Kimi Code 桌面版正在运行（bridge 通过 `~/.kimi-code/server/instances/*.json` 自动发现端口）。
 
@@ -54,7 +52,7 @@ https://xxxx.trycloudflare.com/#k=<钥匙>   # 公网（4G 可用）
 
 ## 已知限制
 
-- **快速隧道地址重启会变**：每次 `npm start` 生成新的 `*.trycloudflare.com`，需要重新扫码（LAN 地址不变）。
+- **快速隧道地址重启会变**：每次 `npm start` 生成新的 `*.trycloudflare.com`，需要重新扫码；隧道不可用时降级为局域网配对地址兜底。
 - **实验性 API 可能漂移**：桌面版 Server API 未承诺稳定。白名单集中在 `allowlist.ts`、上游请求集中在 `upstream.ts`，漂移只改这两处。
 - **新建会话的工作目录**复用最近一个真实会话的工作区（手机上不选目录）；模型取自最近会话的 activity.model（API 建的会话必须显式设 model，否则 turn 立即失败 "Model not set"）。
 - **Markdown 简渲染**：标题/列表/粗斜体/行内代码/围栏代码块/引用/链接，不含表格与图片。
