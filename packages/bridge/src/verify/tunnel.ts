@@ -1,6 +1,6 @@
 // verify:tunnel - bring the bridge up with the cloudflared quick tunnel and
 // hit /healthz on the PUBLIC URL. If the tunnel cannot be established,
-// verifies the LAN address instead and exits 0 with a degraded notice.
+// verifies the loopback address instead and exits 0 with a degraded notice.
 import https from 'node:https';
 import { execFile } from 'node:child_process';
 import { check, finish, loadPairingKey } from './runner.js';
@@ -119,7 +119,7 @@ void (async () => {
     const status = await fetchOk(url);
     check('public tunnel URL /healthz -> 200 ok', status === 200, `status=${status}`);
   } else {
-    console.log('  NOTE  tunnel unavailable - falling back to LAN address');
+    console.log('  NOTE  tunnel unavailable - falling back to loopback address');
     let status = 0;
     for (let i = 1; i <= 5; i++) {
       try {
@@ -133,8 +133,8 @@ void (async () => {
       }
       await new Promise((r) => setTimeout(r, 2000));
     }
-    check('LAN fallback /healthz -> 200 ok (tunnel degraded)', status === 200, `status=${status}`);
-    console.log('  DEGRADED: verify:tunnel passed via LAN fallback; record in PROGRESS.md');
+    check('loopback fallback /healthz -> 200 ok (tunnel degraded)', status === 200, `status=${status}`);
+    console.log('  DEGRADED: verify:tunnel passed via loopback fallback; record in PROGRESS.md');
   }
 
   await bridge.close();

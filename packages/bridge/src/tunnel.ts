@@ -56,7 +56,7 @@ export async function stopTunnel(): Promise<void> {
 }
 
 // Resolves with the public URL, or null if the tunnel could not be
-// established (caller degrades to LAN-only).
+// established (no tunnel, no remote access - the CLI fails loudly).
 export function startTunnel(
   binPath: string,
   localPort: number,

@@ -73,10 +73,10 @@ export async function startBridge(opts: BridgeOptions): Promise<Bridge> {
   const listenPort = opts.port ?? 0;
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject);
-    server.listen(listenPort, '0.0.0.0', resolve);
+    server.listen(listenPort, '127.0.0.1', resolve);
   });
   const port = (server.address() as AddressInfo).port;
-  log(`listening on 0.0.0.0:${port}, upstream desktop instance at 127.0.0.1:${instance.port}`);
+  log(`listening on 127.0.0.1:${port} (loopback only, reached via tunnel), upstream desktop instance at 127.0.0.1:${instance.port}`);
 
   const tunnelReady: Promise<string | null> = opts.tunnel
     ? (async () => {
@@ -84,7 +84,7 @@ export async function startBridge(opts: BridgeOptions): Promise<Bridge> {
           const bin = await ensureCloudflared(CLOUDFLARED_BIN, (s) => log(s));
           return await startTunnel(bin, port, (s) => log(s));
         } catch (e) {
-          log(`tunnel unavailable, LAN-only mode: ${(e as Error).message}`);
+          log(`tunnel unavailable: ${(e as Error).message}`);
           return null;
         }
       })()

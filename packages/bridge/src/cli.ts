@@ -1,12 +1,12 @@
 // kimi-remote bridge CLI. One command to pair your phone:
 //   npm start            (or: node packages/bridge/dist/cli.js)
 // Prints the public (tunnel) pairing URL + QR; the key rides in the #k=
-// fragment. LAN addresses print only as fallback when the tunnel is
-// unavailable. The key never appears in logs beyond this pairing print.
+// fragment. The bridge binds loopback only: no tunnel, no remote access -
+// if the tunnel cannot be established the CLI fails loudly instead of
+// falling back to LAN. The key never appears in logs beyond the pairing print.
 import { loadOrCreateKey, readKeyString } from './crypto.js';
 import { startBridge } from './server.js';
 import { DEFAULT_PORT, KEY_FILE } from './config.js';
-import { lanAddresses } from './net.js';
 import * as QRCode from 'qrcode';
 
 function parseArgs(argv: string[]): { port: number; tunnel: boolean } {
@@ -56,15 +56,13 @@ async function main(): Promise<void> {
       console.log('the tunnel carries ciphertext only.');
       return;
     }
-    console.log('\nPUBLIC URL: unavailable (see log above) - LAN-only fallback.');
-    const lans = lanAddresses().map((ip) => `http://${ip}:${bridge.port}/${fragment}`);
-    const first = lans[0];
-    if (!first) {
-      console.log(`LAN: no routable IPv4 found - use http://localhost:${bridge.port}/${fragment}`);
+    if (!tunnel) {
+      console.log(`\ntunnel disabled (--no-tunnel): dev mode on http://127.0.0.1:${bridge.port}`);
       return;
     }
-    await printQr('LAN pairing URL (fallback)', first);
-    for (const u of lans.slice(1)) console.log(`also: ${u}`);
+    console.error('\nfatal: tunnel unavailable (see log above) - no remote access. fix the network and rerun npm start.');
+    await bridge.close();
+    process.exit(1);
   });
 
   const bye = () => {

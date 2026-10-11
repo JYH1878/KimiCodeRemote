@@ -20,7 +20,7 @@ npm start
 https://xxxx.trycloudflare.com/#k=<钥匙>
 ```
 
-隧道不可用时会降级打印局域网配对地址兜底。
+bridge 只绑 127.0.0.1（局域网无法直连），隧道不可用时 `npm start` 直接报错退出，重跑即可。
 
 `#k=` 后面就是全部凭证。前提：Kimi Code 桌面版正在运行（bridge 通过 `~/.kimi-code/server/instances/*.json` 自动发现端口）。
 
@@ -43,8 +43,8 @@ https://xxxx.trycloudflare.com/#k=<钥匙>
 ## 安全模型
 
 - **单钥匙模型**：首次启动生成 32 字节随机钥匙，存项目根 `.kimi-remote.json`（已 gitignore）。钥匙即全部凭证——能解出合法密文就是自己人，解不出一律 401 拒绝，无用户名无密码无会话。
-- **AES-256-GCM**：每条消息随机 12 字节 IV，密文后附 16 字节 tag，线上格式 `{iv, ct}`（base64url）。浏览器端用 [@noble/ciphers](https://github.com/paulmillr/noble-ciphers) 纯 JS 实现（Web Crypto 在 http:// 局域网地址下不可用，这是刻意绕开的坑），bridge 端用 node:crypto，两者互通。
-- **中继只搬密文**：cloudflared 快速隧道与局域网都只传输密文信封。中继/旁观者理论上可见的只有元数据（连接时间、流量大小、目标域名）。
+- **AES-256-GCM**：每条消息随机 12 字节 IV，密文后附 16 字节 tag，线上格式 `{iv, ct}`（base64url）。浏览器端用 [@noble/ciphers](https://github.com/paulmillr/noble-ciphers) 纯 JS 实现（不依赖 Web Crypto，任何环境可用），bridge 端用 node:crypto，两者互通。
+- **中继只搬密文**：cloudflared 快速隧道只传输密文信封（bridge 只绑 127.0.0.1，不暴露局域网端口）。中继/旁观者理论上可见的只有元数据（连接时间、流量大小、目标域名）。
 - **白名单**：解密后的内层 path 必须命中 `packages/bridge/src/allowlist.ts`（唯一白名单文件）：`/api/v1/healthz`、`GET /api/v2/sessions`、`/api/v1/sessions` 及其子路由（messages/prompts/prompts:steer/approvals/questions/status/transcript/children/profile/:delete）。其余一律 403——尤其 shutdown、config、providers、oauth、fs*、files、remote-control。
 - **钥匙泄露处置**：删除 `.kimi-remote.json` 并重启 bridge，钥匙立即更换；旧配对地址全部失效。
 - **元数据残留**：快速隧道的随机子域名、连接时段与流量大小会被 Cloudflare 看到；会话标题/内容/文件路径均在密文内。bridge 不落任何盘上日志（终端输出除外）。
@@ -52,7 +52,7 @@ https://xxxx.trycloudflare.com/#k=<钥匙>
 
 ## 已知限制
 
-- **快速隧道地址重启会变**：每次 `npm start` 生成新的 `*.trycloudflare.com`，需要重新扫码；隧道不可用时降级为局域网配对地址兜底。
+- **快速隧道地址重启会变**：每次 `npm start` 生成新的 `*.trycloudflare.com`，需要重新扫码；隧道不可用则启动即报错退出，重跑即可。
 - **实验性 API 可能漂移**：桌面版 Server API 未承诺稳定。白名单集中在 `allowlist.ts`、上游请求集中在 `upstream.ts`，漂移只改这两处。
 - **新建会话的工作目录**复用最近一个真实会话的工作区（手机上不选目录）；模型取自最近会话的 activity.model（API 建的会话必须显式设 model，否则 turn 立即失败 "Model not set"）。
 - **Markdown 简渲染**：标题/列表/粗斜体/行内代码/围栏代码块/引用/链接，不含表格与图片。
@@ -68,7 +68,7 @@ https://xxxx.trycloudflare.com/#k=<钥匙>
 | `npm run verify:discovery` | 验证实例发现（应为 54754 活实例） |
 | `npm run verify:e2e` | 全链路验收：加密拒绝/白名单/404/PONG 回环 |
 | `npm run verify:ws` | 加密 WS 订阅→发 prompt→30s 内收到流式事件 |
-| `npm run verify:tunnel` | 公网隧道 `/healthz` 200（失败降级验证 LAN 并提示记录） |
+| `npm run verify:tunnel` | 公网隧道 `/healthz` 200（失败降级验证 loopback 并提示记录） |
 
 ## 目录
 
