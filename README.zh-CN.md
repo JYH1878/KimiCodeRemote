@@ -28,6 +28,35 @@ bridge 只绑 127.0.0.1（局域网无法直连），隧道不可用时 `npm sta
 
 `#k=` 后面就是全部凭证。前提：Kimi Code 桌面版正在运行（bridge 通过 `~/.kimi-code/server/instances/*.json` 自动发现端口）。
 
+## 单 exe 双击即用（Windows）
+
+不想装 Node？打成单个可执行文件：
+
+```bash
+npm install
+npm run build:exe   # 自动先构建；产物 release/KimiCodeRemote.exe（约 93 MB）
+```
+
+双击 `KimiCodeRemote.exe`，效果与 `npm start` 完全一致：控制台显示配对
+地址 + 二维码，扫码即用。cloudflared 不打进 exe，首跑自动下载。所有可变
+数据放在 exe 同目录的 `KimiCodeRemote-data\`（配对钥匙、cloudflared、
+`run\`、`logs\`）；删其中的 `.kimi-remote.json` 即换钥匙，删整个文件夹即
+恢复出厂。exe 拷到哪都能跑——路径全部以 exe 自身位置为准。
+
+- **随桌面版启停**：`KimiCodeRemote.exe --watch` 每 15 秒探测，Kimi Code
+  桌面版在就拉起隐藏 bridge，桌面版关 bridge 自退，下次出现再拉起
+  （bridge 本身就有桌面退出看门狗，watcher 只负责复活）。
+- **开机自启**：首次双击（真实控制台）会询问「以后随 Kimi Code 桌面版
+  自动启动？」，回车默认装；也可用 `--install-autostart` /
+  `--uninstall-autostart` 非交互安装/卸载（在用户 Startup 目录写/删一个
+  .vbs，隐藏窗口拉起 `--watch`）。不写注册表、不需要管理员。
+- **重复双击**：已有 bridge 在跑时再双击，只会重新打印当前配对地址 +
+  二维码后退出（故意不做单实例锁）。
+
+exe 是 Node.js 单文件应用（SEA）：bridge 代码与 PWA 资源全部内嵌，构建时
+烙入当前 node.exe，升级 Node 后需重新构建。目前仅支持 Windows（构建时
+复制本机 node.exe）。
+
 ## 无窗口后台运行
 
 不想留一个前台终端，用后台模式（Windows 隐藏窗口，日志落 `logs/bridge.log`）：
@@ -106,6 +135,7 @@ bin/cloudflared tunnel route dns kimicoderemote kimi.example.com # 绑定你的�
 | `npm run pair` | 打印当前配对地址 + 二维码（需 bridge 隧道就绪） |
 | `npm run stop` | 优雅停止 bridge + 回收 cloudflared，验证无残留 |
 | `npm run build` | 两包编译（tsc + vite） |
+| `npm run build:exe` | 打出 `release/KimiCodeRemote.exe` 单文件（Node SEA，Windows） |
 | `npm run dev` | bridge + vite 热更新（vite 代理到 :7777） |
 | `npm run verify:discovery` | 验证桌面版实例发现（发现任一活实例即 PASS） |
 | `npm run verify:e2e` | 全链路验收：加密拒绝/白名单/404/PONG 回环 |

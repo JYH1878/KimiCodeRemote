@@ -9,3 +9,6 @@ packages/*/.mimosa/
 HANDOFF.md
 logs/
 run/
+
+# single-exe build output
+release/

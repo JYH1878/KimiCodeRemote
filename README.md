@@ -40,6 +40,40 @@ Everything after `#k=` is the entire credential. Prerequisite: the Kimi Code
 desktop app is running (the bridge discovers its port automatically via
 `~/.kimi-code/server/instances/*.json`).
 
+## Single exe: double-click and go (Windows)
+
+No Node, no npm? Package everything into one executable:
+
+```bash
+npm install
+npm run build:exe   # also builds first; output: release/KimiCodeRemote.exe (~93 MB)
+```
+
+Double-click `KimiCodeRemote.exe` and it behaves exactly like `npm start`:
+console shows the pairing URL + QR — scan it and you are done. cloudflared is
+not embedded; on first run it is downloaded automatically. All mutable state
+lives in `KimiCodeRemote-data\` next to the exe (pairing key, cloudflared,
+`run\`, `logs\`); delete `.kimi-remote.json` there to rotate the key, or the
+whole folder for a factory reset. Move the exe anywhere — paths are derived
+from the exe's own location.
+
+- **Follow the desktop app**: `KimiCodeRemote.exe --watch` polls every 15s,
+  starts a hidden bridge when the Kimi Code desktop app appears and lets the
+  bridge exit when it closes (the bridge already follows the desktop app on
+  its own — the watcher just brings it back next time).
+- **Autostart at Windows logon**: on the first double-click (interactive
+  console) you are asked whether to start automatically with the desktop app;
+  the same can be done non-interactively with `--install-autostart` /
+  `--uninstall-autostart` (writes/removes a .vbs in the user's Startup folder
+  that launches the exe hidden with `--watch`). No registry, no admin rights.
+- **Second double-click** while a bridge is already running just re-prints
+  the current pairing URL + QR and exits (no single-instance lock).
+
+The exe is a Node.js single-executable application (SEA): the bridge bundle
+and the PWA assets are embedded; the build stamps the current node.exe, so
+rebuild after a Node upgrade. Windows-only for now (the build copies the
+host's node.exe).
+
 ## Windowless background mode
 
 Prefer no lingering terminal? Run in the background (hidden window on
@@ -165,6 +199,7 @@ with a fixed URL. Missing/invalid config falls back to the quick tunnel.
 | `npm run pair` | print the current pairing URL + QR (needs the tunnel ready) |
 | `npm run stop` | graceful stop + cloudflared reaping, verifies no leftovers |
 | `npm run build` | build both packages (tsc + vite) |
+| `npm run build:exe` | package bridge + PWA into `release/KimiCodeRemote.exe` (Node SEA, Windows) |
 | `npm run dev` | bridge + vite hot reload (vite proxies to :7777) |
 | `npm run verify:discovery` | verify desktop-instance discovery (passes when any live instance is found) |
 | `npm run verify:e2e` | end-to-end checks: encrypted refusals/allowlist/404/PONG round-trip |
