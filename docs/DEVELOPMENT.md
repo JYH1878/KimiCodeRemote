@@ -86,15 +86,6 @@ bin/cloudflared tunnel route dns kimicoderemote kimi.example.com # 绑定你的�
 - `--install-autostart` / `--uninstall-autostart`：非交互安装/卸载开机自启（在用户 Startup 目录写/删一个 .vbs，隐藏窗口拉起 `--watch`）。不写注册表、不需要管理员。
 - 已有 bridge 在跑时再双击 exe，只重新打印当前配对地址 + 二维码后退出（故意不做单实例锁）。
 
-## 发版（GitHub Releases）
-
-公开仓库：`https://github.com/JYH1878/KimiCodeRemote`。无 gh CLI；认证 token 走 `git credential fill`（Git Credential Manager，本机已登录），API 操作用 curl。GitHub 直连不稳时走本机分流代理 `http://127.0.0.1:7897`。
-
-1. 对齐 `package.json` 版本号（SemVer），`npm run build:exe` 重新构建，确认 exe 与 HEAD 代码一致。
-2. `git push origin main` → `git tag vX.Y.Z && git push origin vX.Y.Z`。
-3. 建 Release（API `POST /repos/JYH1878/KimiCodeRemote/releases` 或网页）：标题 `vX.Y.Z`，正文写变更要点 + `## 下载` 节（附 exe 的 SHA256），上传 `release/KimiCodeRemote.exe` 资产（`uploads.github.com`，`Content-Type: application/octet-stream`）。
-4. 发布后无痕验证匿名下载：`releases/latest` 应 302 到最新 tag，资产 URL 匿名可得。
-
 ## 已知限制（开发者向）
 
 - **实验性 API 可能漂移**：桌面版 Server API 未承诺稳定。白名单集中在 `packages/bridge/src/allowlist.ts`、上行路径/请求集中在 `packages/bridge/src/upstream.ts`（`server.token` 只在此附加），漂移只改这两处。API 快照（v2.1.1，2026-10-11 抓取）：`docs/api-snapshot.openapi.json` / `docs/api-snapshot.asyncapi.json`。

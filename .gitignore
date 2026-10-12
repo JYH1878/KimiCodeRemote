@@ -13,3 +13,4 @@ run/
 
 # single-exe build output
 release/
+/REPORT.md
