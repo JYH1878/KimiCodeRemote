@@ -201,3 +201,9 @@
 - 任务8 ⚠️：本地 git commit 被 Mimosa L3 门禁拦截——同 §10 已裁定的两条跨文件污点误报（startBridge→spawn、看门狗→loopback fetch，行号漂移至 cli.ts:290/345，数据流未变）。全部改动已暂存，6 条提交序列与说明写入 BLOCKED.md，待领导终端执行（§10 先例）；零 push、零 remote、零 npm 保持。
 
 **结论：迭代四通过验收（完成条件 1 达成：明卷逐条真跑全绿；完成条件 2 的 commit 一步因门禁误报按先例升级给领导终端执行，见 BLOCKED.md——零 push、零 remote）。**
+
+### 16. 热修：验收临时工作区不再堆积（2026-10-12，领导反馈）
+**现象**：桌面版侧栏反复出现 `kimicoderemote-verify-*` 空工作区条目——verify 每跑一次就用 mkdtemp 新建随机工作区，桌面版 kimi-cu runner 占用其 cwd 导致目录删不掉，跑几次攒几条。
+**修复（verify/runner.ts）**：`createTempWorkspace` 改为固定复用 `%TEMP%\kimicoderemote-verify`；`removeTempWorkspace` 去掉 20 次×2s 空转重试（桌面版运行期注定失败），单次 best-effort 删除 + info 提示保留复用。
+**回归**：build ✅、verify:e2e ✅、verify:ux ✅；两条 verify 连跑后 %TEMP% 只新增 1 个固定目录（7→8，不再随运行次数增长）。
+**遗留清理**：7 个旧随机目录与侧栏旧条目，待桌面版重启（释放 runner 占用）后删除。

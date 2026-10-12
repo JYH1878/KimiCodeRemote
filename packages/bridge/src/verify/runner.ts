@@ -1,7 +1,7 @@
 // Shared helpers for the verify:* suite. Every verify talks to the desktop
 // ONLY through the bridge (encrypted /box or /ws); the single sanctioned
 // exception is e2e's "pairing key is not a server token" 401 probe.
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startBridge, type Bridge } from '../server.js';
@@ -74,29 +74,24 @@ export function finish(): never {
   process.exit(0);
 }
 
+// One fixed workspace reused across runs: the desktop keeps a kimi-cu runner
+// per workspace that pins its cwd, so a fresh mkdtemp per run would pile up
+// undeletable ghost workspaces in the desktop's sidebar.
 export function createTempWorkspace(): string {
-  return mkdtempSync(join(tmpdir(), 'kimicoderemote-verify-'));
+  const dir = join(tmpdir(), 'kimicoderemote-verify');
+  mkdirSync(dir, { recursive: true });
+  return dir;
 }
 
 export function removeTempWorkspace(dir: string): void {
-  // The desktop app keeps one kimi-cu runner process per workspace; it pins
-  // the directory as its cwd even after the session is deleted. Remove what
-  // we can and report the residual empty shell.
-  for (let i = 0; i < 20; i++) {
-    try {
-      rmSync(dir, { recursive: true, force: true, maxRetries: 2, retryDelay: 500 });
-      return;
-    } catch {
-      /* desktop runner still holds the cwd - wait and retry */
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 2000);
-    }
-  }
+  // Removal predictably fails while the desktop holds the cwd - fine, the
+  // fixed directory is reused next run. One best-effort attempt covers the
+  // case where the runner has already exited.
   try {
-    for (const entry of readdirSync(dir)) rmSync(join(dir, entry), { recursive: true, force: true });
+    rmSync(dir, { recursive: true, force: true, maxRetries: 2, retryDelay: 500 });
   } catch {
-    /* contents also pinned */
+    console.log(`  info  fixed verify workspace kept for reuse (desktop runner holds cwd): ${dir}`);
   }
-  console.error(`  WARN  temp workspace not fully removable (desktop runner holds cwd): ${dir}`);
 }
 
 export interface VerifySession {
