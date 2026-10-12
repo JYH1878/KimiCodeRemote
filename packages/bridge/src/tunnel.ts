@@ -3,10 +3,11 @@
 // macOS: .tgz unpacked in pure JS), then spawns `cloudflared tunnel
 // --url http://127.0.0.1:<port>` and parses the trycloudflare URL. The tunnel
 // only ever carries ciphertext; Cloudflare can see timing and sizes at most.
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve, sep } from 'node:path';
 import { gunzipSync } from 'node:zlib';
+import { ProxyAgent, fetch as undiciFetch } from 'undici';
 import { BIN_DIR } from './config.js';
 
 const RELEASE_BASE = 'https://github.com/cloudflare/cloudflared/releases/latest/download/';
@@ -14,6 +15,56 @@ const RELEASE_BASE = 'https://github.com/cloudflare/cloudflared/releases/latest/
 // SSRF guard for the download itself: only https to GitHub hosts.
 const ALLOWED_DOWNLOAD_HOSTS =
   /^https:\/\/([a-z0-9-]+\.)*(github\.com|githubusercontent\.com)\//i;
+
+// Proxy for the cloudflared download only (GitHub is unreachable directly on
+// some networks). Order: HTTPS_PROXY/https_proxy/HTTP_PROXY/http_proxy env,
+// then the Windows system proxy from the registry. The tunnel itself is
+// unaffected (cloudflared connects fine without one).
+export function resolveDownloadProxy(
+  env: NodeJS.ProcessEnv = process.env,
+  platform: string = process.platform,
+): string | null {
+  const raw =
+    env.HTTPS_PROXY ??
+    env.https_proxy ??
+    env.HTTP_PROXY ??
+    env.http_proxy ??
+    (platform === 'win32' ? windowsSystemProxy() : null);
+  return raw ? normalizeProxyUrl(raw) : null;
+}
+
+function windowsSystemProxy(): string | null {
+  try {
+    const key = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings';
+    const enabled = execFileSync('reg.exe', ['query', key, '/v', 'ProxyEnable'], {
+      encoding: 'utf8',
+    });
+    if (!/ProxyEnable\s+REG_DWORD\s+0x0*1\b/i.test(enabled)) return null;
+    const server = execFileSync('reg.exe', ['query', key, '/v', 'ProxyServer'], {
+      encoding: 'utf8',
+    });
+    const m = server.match(/ProxyServer\s+REG_SZ\s+(\S+)/i);
+    return m?.[1] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// Accepts "host:port", "http://host:port" and the per-protocol form
+// "http=host:port;https=host:port" (Windows registry flavor).
+function normalizeProxyUrl(raw: string): string | null {
+  let s = raw.trim();
+  if (!s) return null;
+  if (s.includes('=')) {
+    const entries = s.split(';').map((p) => p.split('='));
+    const pick = (proto: string): string =>
+      entries.find((p) => (p[0] ?? '').trim().toLowerCase() === proto)?.[1]?.trim() ?? '';
+    s = pick('https') || pick('http');
+  }
+  if (!s) return null;
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(s)) s = `http://${s}`;
+  return s;
+}
 
 // Which release asset fits this platform/arch (official asset names).
 export function downloadTarget(platform: string, arch: string): string {
@@ -82,6 +133,46 @@ export function extractCloudflaredFromTgz(tgz: Buffer, binPath: string): string 
   return binPath;
 }
 
+// One download attempt: optional proxy, redirects followed, final host
+// checked against the whitelist. The header phase (connect + redirect chain)
+// is capped at 90s; the body has no total budget (a slow proxy is fine while
+// bytes flow) but aborts after 60s without data, with a 900s backstop. The
+// fetch signal would cover the body too, so timeouts are driven through an
+// AbortController instead. Uses undici's own fetch: Node's global fetch
+// cannot consume a dispatcher from the packaged undici (interface mismatch
+// across bundled versions).
+async function downloadAttempt(url: string, proxy: string | null): Promise<Buffer> {
+  const ac = new AbortController();
+  const headerTimer = setTimeout(() => ac.abort(new Error('header phase exceeded 90s')), 90_000);
+  let res;
+  try {
+    res = await undiciFetch(url, {
+      redirect: 'follow',
+      signal: ac.signal,
+      ...(proxy ? { dispatcher: new ProxyAgent(proxy) } : {}),
+    });
+  } finally {
+    clearTimeout(headerTimer);
+  }
+  const finalUrl = res.url || url;
+  if (!ALLOWED_DOWNLOAD_HOSTS.test(finalUrl)) {
+    throw new Error(`download redirected to untrusted host: ${new URL(finalUrl).host}`);
+  }
+  if (!res.ok) throw new Error(`download failed: HTTP ${res.status}`);
+  if (!res.body) throw new Error('download failed: empty response body');
+  const reader = res.body.getReader();
+  const chunks: Buffer[] = [];
+  const started = Date.now();
+  for (;;) {
+    const stallTimer = setTimeout(() => ac.abort(new Error('download stalled (no data for 60s)')), 60_000);
+    const { done, value } = await reader.read().finally(() => clearTimeout(stallTimer));
+    if (done) break;
+    chunks.push(Buffer.from(value));
+    if (Date.now() - started > 900_000) ac.abort(new Error('download exceeded 900s'));
+  }
+  return Buffer.concat(chunks);
+}
+
 export async function ensureCloudflared(
   binPath: string,
   log: (s: string) => void = console.error,
@@ -89,14 +180,29 @@ export async function ensureCloudflared(
   if (existsSync(binPath)) return binPath;
   mkdirSync(dirname(binPath), { recursive: true });
   const url = downloadTarget(process.platform, process.arch);
-  log(`downloading cloudflared from ${url} ...`);
-  const res = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(600_000) });
-  const finalUrl = res.url || url;
-  if (!ALLOWED_DOWNLOAD_HOSTS.test(finalUrl)) {
-    throw new Error(`download redirected to untrusted host: ${new URL(finalUrl).host}`);
+  const proxy = resolveDownloadProxy();
+  log(`downloading cloudflared from ${url} ...` + (proxy ? ` (via proxy ${proxy})` : ''));
+  // The proxy path can be flaky (a redirect hop stalls, and a minute later
+  // the same hop is fast): retry the proxy before falling back to direct,
+  // and give direct a second try as well.
+  const plan: (string | null)[] = proxy ? [proxy, proxy, null, null] : [null, null];
+  let buf: Buffer | null = null;
+  let lastErr: Error | null = null;
+  for (const via of plan) {
+    try {
+      buf = await downloadAttempt(url, via);
+      break;
+    } catch (e) {
+      lastErr = e as Error;
+      log(`download attempt failed (${via ? 'proxy' : 'direct'}): ${lastErr.message}`);
+    }
   }
-  if (!res.ok) throw new Error(`download failed: HTTP ${res.status}`);
-  const buf = Buffer.from(await res.arrayBuffer());
+  if (buf === null) {
+    throw new Error(
+      `cloudflared download failed: ${lastErr?.message ?? 'unknown'}\n` +
+        `下载失败：确认代理已开启（或已关闭系统代理）后重试；也可以用浏览器下载 ${url} 保存为 ${binPath} 再重新运行。`,
+    );
+  }
   if (buf.length < 1_000_000) throw new Error('downloaded binary suspiciously small, aborting');
   if (url.endsWith('.tgz')) {
     extractCloudflaredFromTgz(buf, binPath);

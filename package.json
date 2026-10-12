@@ -1,6 +1,6 @@
 {
   "name": "kimicoderemote",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Mobile remote control for Kimi Code desktop over an end-to-end-encrypted relay bridge",
   "workspaces": [

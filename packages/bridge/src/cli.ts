@@ -95,6 +95,22 @@ async function printQr(label: string, url: string): Promise<void> {
   }
 }
 
+// Packaged exe + real console (double-click): hold the window open so the
+// message above can actually be read before the process exits. npm start
+// users have terminal scrollback; piped/background runs must never block.
+async function pauseBeforeExit(): Promise<void> {
+  if (!SEA_MODE) return;
+  if (!process.stdin?.isTTY || !process.stdout?.isTTY) return;
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    await rl.question('\n按回车键退出 / press Enter to exit…');
+  } catch {
+    /* stdin closed */
+  } finally {
+    rl.close();
+  }
+}
+
 function appendWatcherLog(line: string): void {
   try {
     mkdirSync(LOG_DIR, { recursive: true });
@@ -247,9 +263,11 @@ async function printSecondInstancePairing(): Promise<void> {
     } else {
       console.log(`already running (pid ${state?.pid ?? '?'}): ${url}/#k=<redacted - run in a console window for the QR>`);
     }
+    await pauseBeforeExit(); // double-clicker needs time to scan the QR
     process.exit(0);
   }
   console.error('the running bridge has not finished establishing its tunnel yet - retry in a moment.');
+  await pauseBeforeExit();
   process.exit(0);
 }
 
@@ -318,6 +336,7 @@ async function main(): Promise<void> {
       return;
     }
     console.error('\nfatal: tunnel unavailable (see log above) - no remote access. fix the network and rerun npm start.');
+    await pauseBeforeExit();
     await bye('tunnel unavailable', 1);
   });
 
@@ -349,5 +368,5 @@ async function main(): Promise<void> {
 
 void main().catch((e: Error) => {
   console.error(`fatal: ${e.message}`);
-  process.exit(1);
+  void pauseBeforeExit().finally(() => process.exit(1));
 });

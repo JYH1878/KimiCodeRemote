@@ -1,6 +1,6 @@
 {
   "name": "@kimicoderemote/bridge",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "main": "dist/cli.js",
@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "qrcode": "^1.5.4",
+    "undici": "^8.11.2",
     "ws": "^8.18.0"
   },
   "devDependencies": {

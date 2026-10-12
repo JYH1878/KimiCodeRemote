@@ -19,7 +19,7 @@ Practical notes:
 - **Windows SmartScreen may warn**: the exe is not code-signed, so the first double-click of a downloaded copy may show "Windows protected your PC" — click "More info → Run anyway".
 - **Autostart offer**: on the first double-click you are asked "start automatically with the Kimi Code desktop app?" — press Enter (default yes). From then on it is invisible: it starts when the desktop app opens, exits about a minute after the desktop app closes, and shows no window.
 - The exe can live anywhere (e.g. your Desktop); all its data goes into `KimiCodeRemote-data\` next to it. Delete `.kimi-remote.json` there to rotate the key (all previously paired URLs stop working), or the whole folder for a factory reset.
-- On first run the cloudflared tunnel component is downloaded automatically (internet access needed — which remote control needs anyway).
+- On first run the cloudflared tunnel component is downloaded automatically (honors HTTPS_PROXY and the Windows system proxy; if the download fails, the window stays open and shows how to place the file manually).
 - Keep the console window open — closing it ends remote control. If you do not want a window, use the autostart above.
 
 ## Option 2: run from source (Windows / macOS)
@@ -31,7 +31,7 @@ npm install
 npm start
 ```
 
-The terminal prints the pairing URL + QR code — scan and go. On first run cloudflared is downloaded into `bin/`; if the tunnel cannot be established, startup fails loudly and you simply rerun.
+The terminal prints the pairing URL + QR code — scan and go. On first run cloudflared is downloaded into `bin/` (honors the HTTPS_PROXY environment variable); if the tunnel cannot be established, startup fails loudly and you simply rerun.
 
 Prefer no terminal window? Use background mode:
 
