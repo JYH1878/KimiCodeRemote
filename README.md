@@ -18,6 +18,7 @@ Practical notes:
 
 - **Windows SmartScreen may warn**: the exe is not code-signed, so the first double-click of a downloaded copy may show "Windows protected your PC" — click "More info → Run anyway".
 - **Autostart offer**: on the first double-click you are asked "start automatically with the Kimi Code desktop app?" — press Enter (default yes). From then on it is invisible: it starts when the desktop app opens, exits about a minute after the desktop app closes, and shows no window.
+- **Need the QR code again?** Double-click the exe again at any time — it reprints the current pairing URL and QR code, waits for you to press Enter, and exits without disturbing the running service.
 - The exe can live anywhere (e.g. your Desktop); all its data goes into `KimiCodeRemote-data\` next to it. Delete `.kimi-remote.json` there to rotate the key (all previously paired URLs stop working), or the whole folder for a factory reset.
 - On first run the cloudflared tunnel component is downloaded automatically (honors HTTPS_PROXY and the Windows system proxy; if the download fails, the window stays open and shows how to place the file manually).
 - Keep the console window open — closing it ends remote control. If you do not want a window, use the autostart above.
