@@ -2,171 +2,78 @@
 
 [English](README.md) | 简体中文
 
-手机远控电脑上的 **Kimi Code 桌面版**：会话列表 → 实时消息流 → 发消息 → 审批/提问应答。
-任意网络可达（4G 可连），且**端到端加密**——中继只搬密文。
+用手机远控电脑上的 **Kimi Code 桌面版**：出门在外也能看会话进度、发消息、应答审批和提问。手机用 4G 就能连，全程端到端加密——中继服务器只搬运密文。不用装 App，不用注册账号，手机浏览器打开一个网址就是控制界面。
 
 > **免责声明**：本项目为非官方社区项目，与 Moonshot AI 无任何关联，亦未获其授权或认可。Kimi 是 Moonshot AI 的商标。
 
 > 官方桌面版远控尚未发布（PR #4169 开发中），第三方产品均只支持 CLI。本项目是桌面版的首个可用远控方案。调研依据见 [REPORT.md](REPORT.md)。
 
-## 30 秒上手
+## 方式一：下载 exe，双击即用（Windows）
+
+前提只有一个：电脑上**正在运行** Kimi Code 桌面版。
+
+1. 从 [Releases](https://github.com/JYH1878/KimiCodeRemote/releases) 下载最新的 `KimiCodeRemote.exe`（约 93 MB）。
+2. 双击它——控制台窗口会打印配对地址和二维码。
+3. 手机扫码（或用手机浏览器打开该地址），完成配对，进入控制界面。
+
+几个实操提示：
+
+- **Windows SmartScreen 可能拦截**：exe 没有做代码签名，下载后首次双击可能弹「Windows 已保护你的电脑」——点「更多信息 → 仍要运行」即可。
+- **首次双击会问**「以后随 Kimi Code 桌面版自动启动？」，回车（默认装）即可。装好后完全无感：桌面版一开它就启动，桌面版一关它约一分钟内自动退出，没有窗口。
+- exe 可以拷到任何位置（比如桌面）；所有数据放在它旁边的 `KimiCodeRemote-data\`。删其中的 `.kimi-remote.json` 即换钥匙（旧配对地址全部失效），删整个文件夹即恢复出厂。
+- 首次运行会自动下载隧道组件 cloudflared（需要联网——本来就是联网用的）。
+- 弹出的控制台窗口别关，关了远控就断；不想看到窗口就用上面的开机自启。
+
+## 方式二：从源码运行（Windows / macOS）
+
+适合想看代码的用户和 macOS 用户。前提：装有 [Node.js](https://nodejs.org/) ≥ 20，且 Kimi Code 桌面版运行中。
 
 ```bash
 npm install
-npm start          # 前台模式：终端打印配对地址 + 二维码
+npm start
 ```
 
-终端会打印**公网配对地址 + 二维码**（cloudflared 快速隧道，免账号；首次运行按你的系统自动下载对应的 cloudflared 二进制到 `bin/`，支持 Windows 与 macOS）。
+终端打印配对地址 + 二维码，手机扫码即用。首次运行会自动下载 cloudflared 到 `bin/`；隧道不可用时启动会直接报错退出，重跑一次即可。
 
-手机（任意网络，4G 也行）**扫码或打开配对地址**即可，形如：
-
-```
-https://xxxx.trycloudflare.com/#k=<钥匙>
-```
-
-bridge 只绑 127.0.0.1（局域网无法直连），隧道不可用时 `npm start` 直接报错退出，重跑即可。
-
-`#k=` 后面就是全部凭证。前提：Kimi Code 桌面版正在运行（bridge 通过 `~/.kimi-code/server/instances/*.json` 自动发现端口）。
-
-## 单 exe 双击即用（Windows）
-
-不想装 Node？打成单个可执行文件：
+不想留终端窗口，用后台模式：
 
 ```bash
-npm install
-npm run build:exe   # 自动先构建；产物 release/KimiCodeRemote.exe（约 93 MB）
+npm run start:bg   # 后台启动（Windows 隐藏窗口，日志在 logs/bridge.log）
+npm run pair       # 随时重新打印配对地址 + 二维码
+npm run stop       # 优雅停止并清理
 ```
 
-双击 `KimiCodeRemote.exe`，效果与 `npm start` 完全一致：控制台显示配对
-地址 + 二维码，扫码即用。cloudflared 不打进 exe，首跑自动下载。所有可变
-数据放在 exe 同目录的 `KimiCodeRemote-data\`（配对钥匙、cloudflared、
-`run\`、`logs\`）；删其中的 `.kimi-remote.json` 即换钥匙，删整个文件夹即
-恢复出厂。exe 拷到哪都能跑——路径全部以 exe 自身位置为准。
+隧道就绪需要 10–90 秒，之后 `npm run pair` 随时可看地址。桌面版关闭后 bridge 会自动跟着退出，不留孤儿进程。
 
-- **随桌面版启停**：`KimiCodeRemote.exe --watch` 每 15 秒探测，Kimi Code
-  桌面版在就拉起隐藏 bridge，桌面版关 bridge 自退，下次出现再拉起
-  （bridge 本身就有桌面退出看门狗，watcher 只负责复活）。
-- **开机自启**：首次双击（真实控制台）会询问「以后随 Kimi Code 桌面版
-  自动启动？」，回车默认装；也可用 `--install-autostart` /
-  `--uninstall-autostart` 非交互安装/卸载（在用户 Startup 目录写/删一个
-  .vbs，隐藏窗口拉起 `--watch`）。不写注册表、不需要管理员。
-- **重复双击**：已有 bridge 在跑时再双击，只会重新打印当前配对地址 +
-  二维码后退出（故意不做单实例锁）。
+在源码目录里也可以 `npm run build:exe` 自己打出 exe（产物 `release/KimiCodeRemote.exe`），之后双击即用，与方式一下载的完全相同。
 
-exe 是 Node.js 单文件应用（SEA）：bridge 代码与 PWA 资源全部内嵌，构建时
-烙入当前 node.exe，升级 Node 后需重新构建。目前仅支持 Windows（构建时
-复制本机 node.exe）。
+## 手机上能做什么
 
-## 无窗口后台运行
+- **会话列表**：按工作区分组，点分组的「+」可在对应工作区新建会话（模型取该工作区最新会话的模型）
+- **实时消息流**：Kimi 的回复流式刷新
+- **发消息**：像平时一样下指令
+- **应答审批和提问**：工具调用审批、agent 提问都能在手机上直接处理
 
-不想留一个前台终端，用后台模式（Windows 隐藏窗口，日志落 `logs/bridge.log`）：
+网页端的 Markdown 是简渲染（没有表格和图片），精细阅读回电脑上看。
 
-```bash
-npm run start:bg   # 隐藏窗口后台启动；已在跑则提示、不重复起
-npm run pair       # 打印当前配对地址 + 二维码（读 run/state.json）
-npm run stop       # 优雅停止：关隧道、回收 cloudflared、清理 run/
-```
+## 常见问题
 
-- 隧道就绪需要 10–90 秒，就绪后 `run/state.json` 写入 `{url, pid, started_at}`，`npm run pair` 随时可看。
-- **桌面版退出跟随**：bridge 每 15 秒检查所连的桌面实例，进程消失且 healthz 失联连续 5 次（约 1 分钟）就优雅退出并清理——桌面版关了，远控跟着结束，不留孤儿进程。
-- `logs/`、`run/` 均已 gitignore。
+- **网址每次重启都会变**，需要重新扫码。有自己的 Cloudflare 域名可以配置固定地址，方法见[开发者文档](docs/DEVELOPMENT.md)。
+- **怎么停止**：前台模式按 `Ctrl+C` 或关掉窗口；后台模式 `npm run stop`；exe 在任务管理器里结束 `KimiCodeRemote.exe`。
+- **打不开 / 配对失败**：先看电脑上的程序还在不在运行，再用最新打印的二维码重扫一次（旧地址可能已失效）。
 
-### 固定域名：命名隧道（可选）
+## 安全（一分钟版）
 
-快速隧道的地址每次重启都会变。有自己的 Cloudflare 账号和域名时，可一次性配置命名隧道，配对地址固定为 `https://<你的域名>`（`bin/cloudflared` 在 Windows 上是 `bin/cloudflared.exe`）：
+- **端到端加密**：AES-256-GCM，手机和电脑之间的中继（Cloudflare 隧道）只搬运密文，能看到的只有连接时间和流量大小。
+- **一把钥匙**：`#k=` 后的钥匙即全部凭证，没有用户名和密码。钥匙存在电脑上的 `.kimi-remote.json`，手机上存浏览器 localStorage——共用手机时注意。
+- **钥匙泄露了**：删掉电脑上的 `.kimi-remote.json` 重启程序，钥匙立即更换，旧地址全部作废。
+- 程序只监听本机回环（127.0.0.1），局域网无法直连，对外只有加密隧道一个入口。
 
-```bash
-bin/cloudflared tunnel login                                     # 浏览器授权
-bin/cloudflared tunnel create kimicoderemote                     # 创建隧道（记住输出的 UUID 即名称 kimicoderemote）
-bin/cloudflared tunnel route dns kimicoderemote kimi.example.com # 绑定你的子域名
-```
+完整的安全模型、API 白名单和实现细节见[开发者文档](docs/DEVELOPMENT.md)。
 
-然后在 `.kimi-remote.json`（项目根，gitignored）加一段：
+## 开发者
 
-```json
-{
-  "key": "<现有钥匙，别动>",
-  "tunnel": { "mode": "named", "name": "kimicoderemote", "hostname": "kimi.example.com" }
-}
-```
-
-重启 bridge 即走 `cloudflared tunnel run kimicoderemote`，地址固定。未配置或配置不合法时自动回退快速隧道。
-
-## 架构（文字版）
-
-```
-┌────────┐  AES-256-GCM 加密信封   ┌─────────────┐   明文+Bearer     ┌──────────────────┐
-│ 手机    │ ─────────────────────▶ │ bridge(电脑) │ ────────────────▶ │ Kimi 桌面版内嵌   │
-│ PWA    │ ◀───────────────────── │ :7777       │ ◀──────────────── │ server 127.0.0.1 │
-└────────┘   {iv,ct} 密文信封      └─────────────┘  server.token     └──────────────────┘
-     │            ▲                     │
-     │ WSS(密文帧) └────── /ws 加密帧桥  └─── cloudflared 快速隧道（只转发密文）
-     └── 浏览器内存持有钥匙；localStorage 存副本
-```
-
-- **bridge**（`packages/bridge`，Node+TS）：只暴露 4 个面——静态 PWA、`GET /healthz`、`POST /box`（加密 HTTP 代理）、`WS /ws`（加密双向帧桥）。其余一律 404。
-- **pwa**（`packages/pwa`，Vite+React+TS，移动优先）：构建产物由 bridge 直接 serve。
-- 桌面版的 `server.token` 只存在于 bridge→127.0.0.1 的请求头里，永不出现在任何响应、日志或前端产物。
-
-## 安全模型
-
-- **单钥匙模型**：首次启动生成 32 字节随机钥匙，存项目根 `.kimi-remote.json`（已 gitignore）。钥匙即全部凭证——能解出合法密文就是自己人，解不出一律 401 拒绝，无用户名无密码无会话。
-- **AES-256-GCM**：每条消息随机 12 字节 IV，密文后附 16 字节 tag，线上格式 `{iv, ct}`（base64url）。浏览器端用 [@noble/ciphers](https://github.com/paulmillr/noble-ciphers) 纯 JS 实现（不依赖 Web Crypto，任何环境可用），bridge 端用 node:crypto，两者互通。
-- **中继只搬密文**：cloudflared 快速隧道只传输密文信封（bridge 只绑 127.0.0.1，不暴露局域网端口）。中继/旁观者理论上可见的只有元数据（连接时间、流量大小、目标域名）。
-- **白名单**：解密后的内层 path 必须命中 `packages/bridge/src/allowlist.ts`（唯一白名单文件）：`/api/v1/healthz`、`GET /api/v2/sessions`、`/api/v1/sessions` 及其子路由（messages/prompts/prompts:steer/approvals/questions/status/transcript/children/profile/:delete）。其余一律 403——尤其 shutdown、config、providers、oauth、fs*、files、remote-control。
-- **钥匙泄露处置**：删除 `.kimi-remote.json` 并重启 bridge，钥匙立即更换；旧配对地址全部失效。
-- **元数据残留**：快速隧道的随机子域名、连接时段与流量大小会被 Cloudflare 看到；会话标题/内容/文件路径均在密文内。bridge 不落任何盘上日志（终端输出除外）。
-- 手机端钥匙存 localStorage（`kimi_remote_key`）：共用手机/浏览器时注意；URL hash 里的钥匙在载入后立即从地址栏抹掉。
-
-## 已知限制
-
-- **快速隧道地址重启会变**：每次 `npm start` / `npm run start:bg` 生成新的 `*.trycloudflare.com`，需要重新扫码；要固定地址请配置[命名隧道](#固定域名命名隧道可选)。隧道不可用则启动即报错退出，重跑即可。
-- **实验性 API 可能漂移**：桌面版 Server API 未承诺稳定。白名单集中在 `allowlist.ts`、上游请求集中在 `upstream.ts`，漂移只改这两处。
-- **手机新建会话**：在会话列表对应工作区分组的「+」里新建，工作目录即该组工作区；模型取该组（无则全局）最新会话的 activity.model（API 建的会话必须显式设 model，否则 turn 立即失败 "Model not set"）。
-- **Markdown 简渲染**：标题/列表/粗斜体/行内代码/围栏代码块/引用/链接，不含表格与图片。
-- 每个远控新建的临时工作区会残留一个桌面版 `kimi-cu` runner 进程（桌面版自身行为），重启桌面版后释放。
-
-## 命令
-
-| 命令 | 作用 |
-|---|---|
-| `npm start` | 起 bridge（前台），打印配对地址+二维码 |
-| `npm run start:bg` | 无窗口后台启动（日志 `logs/bridge.log`，已在跑则不重复起） |
-| `npm run pair` | 打印当前配对地址 + 二维码（需 bridge 隧道就绪） |
-| `npm run stop` | 优雅停止 bridge + 回收 cloudflared，验证无残留 |
-| `npm run build` | 两包编译（tsc + vite） |
-| `npm run build:exe` | 打出 `release/KimiCodeRemote.exe` 单文件（Node SEA，Windows） |
-| `npm run dev` | bridge + vite 热更新（vite 代理到 :7777） |
-| `npm run verify:discovery` | 验证桌面版实例发现（发现任一活实例即 PASS） |
-| `npm run verify:e2e` | 全链路验收：加密拒绝/白名单/404/PONG 回环 |
-| `npm run verify:ws` | 加密 WS 订阅→发 prompt→30s 内收到流式事件 |
-| `npm run verify:tunnel` | 公网隧道 `/healthz` 200（失败降级验证 loopback 并提示记录） |
-| `npm run verify:ux` | 消息流分页语义 + 工作区分组字段（临时会话发 2 条消息实测） |
-| `npm run verify:pwa` | PWA 消息清洗断言（直连桌面 server 只读拉取真实会话取证） |
-
-## 目录
-
-```
-packages/bridge/src/
-  allowlist.ts   白名单（唯一文件）
-  upstream.ts    上行路径与请求（唯一文件）
-  crypto.ts      AES-256-GCM 信封
-  discovery.ts   桌面版实例发现（注册表+healthz 探活）
-  server.ts      http 面：/healthz /box /ws 静态
-  wsbridge.ts    加密 WS 协议 + 上游 WS 复用
-  tunnel.ts      cloudflared 下载（跨平台）、快速隧道、命名隧道
-  runstate.ts    run/ 生命周期：pid/state/stop + 桌面退出看门狗
-  cli.ts         npm start 入口（打印配对地址/二维码）
-  verify/        验收脚本（只走 bridge，唯一例外见 e2e）
-packages/pwa/src/
-  api.ts         加密 /box 客户端 + WS 自动重连
-  crypto.ts      @noble/ciphers 信封（与 bridge 同格式）
-  views/         配对页 / 会话列表（按工作区分组）/ 会话详情（消息流+审批+提问）
-scripts/
-  start-bg.mjs   无窗口后台启动（detached+windowsHide，等价 wscript 方案）
-  stop.mjs       优雅停止 + 残留回收（stop 文件 → taskkill 兜底）
-  pair.mjs       打印配对地址 + 二维码
-```
+架构、完整安全模型、全部命令、验收脚本与目录结构：[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)。
 
 ## 许可证
 

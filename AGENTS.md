@@ -1,11 +1,12 @@
 # AGENTS.md — KimiCodeRemote
 
 ## 定位
-手机远控 Kimi Code 桌面版的独立软件：电脑端 bridge + 手机端 PWA，AES-256-GCM 端到端加密，经 cloudflared 快速隧道任意网络可达。调研依据见 REPORT.md。
+手机远控 Kimi Code 桌面版的独立软件：电脑端 bridge + 手机端 PWA，AES-256-GCM 端到端加密，经 cloudflared 快速隧道任意网络可达。调研依据见 REPORT.md。公开仓库：https://github.com/JYH1878/KimiCodeRemote （MIT）。
 
 ## 怎么跑
 - 前提：Kimi Code 桌面版正在运行（bridge 读 `~/.kimi-code/server/instances/*.json` 自动发现其内嵌 server 端口）。
-- 启动：`npm install && npm start`（前台打印配对地址+二维码），或 `npm run start:bg`（无窗口后台）+ `npm run pair`（看配对地址）+ `npm run stop`（优雅停止），或 `npm run build:exe` 打出 `release/KimiCodeRemote.exe` 双击即用（Windows，Node SEA；含 `--watch` 随桌面版启停与 `--install-autostart`/`--uninstall-autostart` 开机自启）。
+- 用户路径：GitHub Releases 下载 `KimiCodeRemote.exe` 双击即用（Windows）。
+- 源码路径：`npm install && npm start`（前台打印配对地址+二维码），或 `npm run start:bg`（无窗口后台）+ `npm run pair`（看配对地址）+ `npm run stop`（优雅停止），或 `npm run build:exe` 打出 `release/KimiCodeRemote.exe`（Windows，Node SEA；含 `--watch` 随桌面版启停与 `--install-autostart`/`--uninstall-autostart` 开机自启）。
 - 验收：`npm run build`、`npm run build:exe`、`npm run verify:discovery|e2e|ws|tunnel|ux|pwa`，全绿才算完。
 - 新会话接手先读 HANDOFF.md（本机内部文件，已 gitignore 不入库）。
 
@@ -19,12 +20,14 @@
 - API 快照（v2.1.1，2026-10-11 抓取）：`docs/api-snapshot.openapi.json` / `docs/api-snapshot.asyncapi.json`。
 - 配对钥匙：项目根 `.kimi-remote.json`（gitignored，首启自动生成；删除重启即换钥匙）。exe（SEA）模式下钥匙与全部数据在 exe 同目录 `KimiCodeRemote-data\`（路径以 `process.execPath` 为准，禁用 import.meta.url 推导）。钥匙即全部凭证。
 - SEA 构建：`scripts/build-exe.mjs`（esbuild 打 CJS + 动态收集 pwa/dist 为 SEA assets + postject 注入；PWA 文件名带 hash，清单构建时生成禁止手抄；注入时 "The signature seems corrupted!" 属正常）。
+- 发版流程见 docs/DEVELOPMENT.md「发版」一节。
 
 ## 红线
 - `~/.kimi-code` 只读；禁止调 `/api/v1/shutdown`；禁止动桌面版进程。
 - 任何真实 token/钥匙不得进代码、测试、日志、git 历史。
-- git 只本地 commit，不 push。
+- 仓库已公开：push 前必须重扫泄密（钥匙/token/日志/隐私），禁止强推。
 
 ## 当前状态与下一步
 - 2026-10-11 同日四轮验收通过：MVP（验收命令全绿 + 手机 4G 人工实测通过）；迭代二：消息流修复、会话按工作区分组、无窗口后台运行（start:bg/stop/pair + 桌面退出跟随 + 可选命名隧道）；迭代三：消息流净化（skill 加载信息正确归类，不再冒充用户消息）、ZCode 风卡片界面、Kimi 深蓝黑+亮蓝配色；迭代四：单 exe 双击即用（build:exe / Node SEA，内嵌 PWA 资源）+ 随桌面版自启（--watch 蹲守拉起 + Startup .vbs 自启 + 二实例重印配对码）。
+- 2026-10-12 开源发布：GitHub 仓库公开、Releases 分发 exe；README 重写为使用者视角，开发者文档拆至 docs/DEVELOPMENT.md。
 - 在途任务：无。候选迭代见 HANDOFF.md「正在推进的任务」。
