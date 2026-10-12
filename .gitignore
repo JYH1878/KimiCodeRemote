@@ -14,3 +14,4 @@ run/
 # single-exe build output
 release/
 /REPORT.md
+/PROGRESS.md

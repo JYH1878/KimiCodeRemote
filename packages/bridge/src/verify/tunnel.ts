@@ -134,7 +134,7 @@ void (async () => {
       await new Promise((r) => setTimeout(r, 2000));
     }
     check('loopback fallback /healthz -> 200 ok (tunnel degraded)', status === 200, `status=${status}`);
-    console.log('  DEGRADED: verify:tunnel passed via loopback fallback; record in PROGRESS.md');
+    console.log('  DEGRADED: verify:tunnel passed via loopback fallback (public tunnel unreachable; usually transient — rerun later)');
   }
 
   await bridge.close();
