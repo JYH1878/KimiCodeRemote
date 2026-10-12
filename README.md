@@ -6,13 +6,11 @@ Remote-control the **Kimi Code desktop app** from your phone: check on sessions,
 
 > **Disclaimer**: This is an unofficial community project, not affiliated with or endorsed by Moonshot AI. Kimi is a trademark of Moonshot AI.
 
-> Official remote control for the desktop app has not shipped yet (PR #4169 in development) and third-party tools only support the CLI. This project is the first working remote for the desktop app. Research notes in [REPORT.md](REPORT.md) (Chinese).
-
 ## Option 1: download the exe and double-click (Windows)
 
 The only prerequisite: the Kimi Code desktop app is **running** on the computer.
 
-1. Download the latest `KimiCodeRemote.exe` (~93 MB) from [Releases](https://github.com/JYH1878/KimiCodeRemote/releases).
+1. Download the latest `KimiCodeRemote.exe` from [Releases](https://github.com/JYH1878/KimiCodeRemote/releases).
 2. Double-click it — a console window prints the pairing URL and a QR code.
 3. Scan the QR code (or open the URL) on your phone. Pairing is done; you are in the control panel.
 
@@ -62,7 +60,7 @@ Markdown rendering in the web UI is simplified (no tables or images) — read lo
 - **Stopping**: `Ctrl+C` or closing the window in foreground; `npm run stop` in background mode; end `KimiCodeRemote.exe` in Task Manager for the exe.
 - **Cannot open / pairing failed**: check the program is still running on the computer, then re-scan with the freshly printed QR code (old URLs may already be invalid).
 
-## Security in one minute
+## Security
 
 - **End-to-end encrypted**: AES-256-GCM. The relay between phone and computer (a Cloudflare tunnel) only carries ciphertext; all an observer can see is connection times and traffic sizes.
 - **One key**: everything after `#k=` is the entire credential — no usernames or passwords. The key lives in `.kimi-remote.json` on the computer and in the browser's localStorage on the phone — be careful on shared phones.

@@ -6,13 +6,11 @@
 
 > **免责声明**：本项目为非官方社区项目，与 Moonshot AI 无任何关联，亦未获其授权或认可。Kimi 是 Moonshot AI 的商标。
 
-> 官方桌面版远控尚未发布（PR #4169 开发中），第三方产品均只支持 CLI。本项目是桌面版的首个可用远控方案。调研依据见 [REPORT.md](REPORT.md)。
-
 ## 方式一：下载 exe，双击即用（Windows）
 
 前提只有一个：电脑上**正在运行** Kimi Code 桌面版。
 
-1. 从 [Releases](https://github.com/JYH1878/KimiCodeRemote/releases) 下载最新的 `KimiCodeRemote.exe`（约 93 MB）。
+1. 从 [Releases](https://github.com/JYH1878/KimiCodeRemote/releases) 下载最新的 `KimiCodeRemote.exe`。
 2. 双击它——控制台窗口会打印配对地址和二维码。
 3. 手机扫码（或用手机浏览器打开该地址），完成配对，进入控制界面。
 
@@ -62,7 +60,7 @@ npm run stop       # 优雅停止并清理
 - **怎么停止**：前台模式按 `Ctrl+C` 或关掉窗口；后台模式 `npm run stop`；exe 在任务管理器里结束 `KimiCodeRemote.exe`。
 - **打不开 / 配对失败**：先看电脑上的程序还在不在运行，再用最新打印的二维码重扫一次（旧地址可能已失效）。
 
-## 安全（一分钟版）
+## 安全
 
 - **端到端加密**：AES-256-GCM，手机和电脑之间的中继（Cloudflare 隧道）只搬运密文，能看到的只有连接时间和流量大小。
 - **一把钥匙**：`#k=` 后的钥匙即全部凭证，没有用户名和密码。钥匙存在电脑上的 `.kimi-remote.json`，手机上存浏览器 localStorage——共用手机时注意。
