@@ -1,79 +1,79 @@
 # KimiCodeRemote
 
-English | [简体中文](README.zh-CN.md)
+简体中文 | [English](README.en.md)
 
-Remote-control the **Kimi Code desktop app** from your phone: check on sessions, send prompts, and answer approvals/questions while away from your computer. Works over any network (4G included) and is end-to-end encrypted — the relay only ever carries ciphertext. No app to install, no account to create: the phone's browser is the control panel.
+用手机远控电脑上的 **Kimi Code 桌面版**：出门在外也能看会话进度、发消息、应答审批和提问。手机用 4G 就能连，全程端到端加密——中继服务器只搬运密文。不用装 App，不用注册账号，手机浏览器打开一个网址就是控制界面。
 
-> **Disclaimer**: This is an unofficial community project, not affiliated with or endorsed by Moonshot AI. Kimi is a trademark of Moonshot AI.
+> **免责声明**：本项目为非官方社区项目，与 Moonshot AI 无任何关联，亦未获其授权或认可。Kimi 是 Moonshot AI 的商标。
 
-## Option 1: download the exe and double-click (Windows)
+## 方式一：下载 exe，双击即用（Windows）
 
-The only prerequisite: the Kimi Code desktop app is **running** on the computer.
+前提只有一个：电脑上**正在运行** Kimi Code 桌面版。
 
-1. Download the latest `KimiCodeRemote.exe` from [Releases](https://github.com/JYH1878/KimiCodeRemote/releases).
-2. Double-click it — a console window prints the pairing URL and a QR code.
-3. Scan the QR code (or open the URL) on your phone. Pairing is done; you are in the control panel.
+1. 从 [Releases](https://github.com/JYH1878/KimiCodeRemote/releases) 下载最新的 `KimiCodeRemote.exe`。
+2. 双击它——控制台窗口会打印配对地址和二维码。
+3. 手机扫码（或用手机浏览器打开该地址），完成配对，进入控制界面。
 
-Practical notes:
+几个实操提示：
 
-- **Windows SmartScreen may warn**: the exe is not code-signed, so the first double-click of a downloaded copy may show "Windows protected your PC" — click "More info → Run anyway".
-- **Autostart offer**: on the first double-click you are asked "start automatically with the Kimi Code desktop app?" — press Enter (default yes). From then on it is invisible: it starts when the desktop app opens, exits about a minute after the desktop app closes, and shows no window.
-- **Need the QR code again?** Double-click the exe again at any time — it reprints the current pairing URL and QR code, waits for you to press Enter, and exits without disturbing the running service.
-- The exe can live anywhere (e.g. your Desktop); all its data goes into `KimiCodeRemote-data\` next to it. Delete `.kimi-remote.json` there to rotate the key (all previously paired URLs stop working), or the whole folder for a factory reset.
-- On first run the cloudflared tunnel component is downloaded automatically (honors HTTPS_PROXY and the Windows system proxy; if the download fails, the window stays open and shows how to place the file manually).
-- Keep the console window open — closing it ends remote control. If you do not want a window, use the autostart above.
+- **Windows SmartScreen 可能拦截**：exe 没有做代码签名，下载后首次双击可能弹「Windows 已保护你的电脑」——点「更多信息 → 仍要运行」即可。
+- **首次双击会问**「以后随 Kimi Code 桌面版自动启动？」，回车（默认装）即可。装好后完全无感：桌面版一开它就启动，桌面版一关它约一分钟内自动退出，没有窗口。
+- **想再看二维码**：任何时候再双击一次 exe——它会重印当前配对地址和二维码，等你按回车后自行退出，不影响正在运行的服务。
+- exe 可以拷到任何位置（比如桌面）；所有数据放在它旁边的 `KimiCodeRemote-data\`。删其中的 `.kimi-remote.json` 即换钥匙（旧配对地址全部失效），删整个文件夹即恢复出厂。
+- 首次运行会自动下载隧道组件 cloudflared（自动识别 HTTPS_PROXY 环境变量和 Windows 系统代理；下载失败时窗口会停住并给出手动放置文件的方法）。
+- 弹出的控制台窗口别关，关了远控就断；不想看到窗口就用上面的开机自启。
 
-## Option 2: run from source (Windows / macOS)
+## 方式二：从源码运行（Windows / macOS）
 
-For reading the code, and for macOS users. Prerequisites: [Node.js](https://nodejs.org/) ≥ 20, and the Kimi Code desktop app running.
+适合想看代码的用户和 macOS 用户。前提：装有 [Node.js](https://nodejs.org/) ≥ 20，且 Kimi Code 桌面版运行中。
 
 ```bash
 npm install
 npm start
 ```
 
-The terminal prints the pairing URL + QR code — scan and go. On first run cloudflared is downloaded into `bin/` (honors the HTTPS_PROXY environment variable); if the tunnel cannot be established, startup fails loudly and you simply rerun.
+终端打印配对地址 + 二维码，手机扫码即用。首次运行会自动下载 cloudflared 到 `bin/`（支持 HTTPS_PROXY 环境变量）；隧道不可用时启动会直接报错退出，重跑一次即可。
 
-Prefer no terminal window? Use background mode:
+不想留终端窗口，用后台模式：
 
 ```bash
-npm run start:bg   # background start (hidden window on Windows, logs in logs/bridge.log)
-npm run pair       # re-print the current pairing URL + QR code any time
-npm run stop       # graceful stop and cleanup
+npm run start:bg   # 后台启动（Windows 隐藏窗口，日志在 logs/bridge.log）
+npm run pair       # 随时重新打印配对地址 + 二维码
+npm run stop       # 优雅停止并清理
 ```
 
-The tunnel takes 10–90 seconds to become ready; after that `npm run pair` shows the address any time. When the desktop app closes, the bridge follows and exits on its own — no orphan processes.
+隧道就绪需要 10–90 秒，之后 `npm run pair` 随时可看地址。桌面版关闭后 bridge 会自动跟着退出，不留孤儿进程。
 
-You can also build the exe yourself with `npm run build:exe` (output `release/KimiCodeRemote.exe`) — double-click from then on, identical to the download in option 1.
+在源码目录里也可以 `npm run build:exe` 自己打出 exe（产物 `release/KimiCodeRemote.exe`），之后双击即用，与方式一下载的完全相同。
 
-## What you can do from the phone
+## 手机上能做什么
 
-- **Session list**: grouped by workspace; the "+" on a group creates a new session in that workspace (its model follows the group's newest session)
-- **Live message stream**: Kimi's replies stream in real time
-- **Send prompts**: give instructions as usual
-- **Answer approvals and questions**: tool-call approvals and agent questions can be handled right on the phone
+- **会话列表**：按工作区分组，点分组的「+」可在对应工作区新建会话（模型取该工作区最新会话的模型）
+- **实时消息流**：Kimi 的回复流式刷新
+- **发消息**：像平时一样下指令
+- **应答审批和提问**：工具调用审批、agent 提问都能在手机上直接处理
 
-Markdown rendering in the web UI is simplified (no tables or images) — read long-form output on the computer.
+网页端的 Markdown 是简渲染（没有表格和图片），精细阅读回电脑上看。
 
-## FAQ
+## 常见问题
 
-- **The URL changes on every restart**, so re-scan after each start. With your own Cloudflare domain you can pin a fixed address — see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) (Chinese).
-- **Stopping**: `Ctrl+C` or closing the window in foreground; `npm run stop` in background mode; end `KimiCodeRemote.exe` in Task Manager for the exe.
-- **Cannot open / pairing failed**: check the program is still running on the computer, then re-scan with the freshly printed QR code (old URLs may already be invalid).
+- **网址每次重启都会变**，需要重新扫码。有自己的 Cloudflare 域名可以配置固定地址，方法见[开发者文档](docs/DEVELOPMENT.md)。
+- **怎么停止**：前台模式按 `Ctrl+C` 或关掉窗口；后台模式 `npm run stop`；exe 在任务管理器里结束 `KimiCodeRemote.exe`。
+- **打不开 / 配对失败**：先看电脑上的程序还在不在运行，再用最新打印的二维码重扫一次（旧地址可能已失效）。
 
-## Security
+## 安全
 
-- **End-to-end encrypted**: AES-256-GCM. The relay between phone and computer (a Cloudflare tunnel) only carries ciphertext; all an observer can see is connection times and traffic sizes.
-- **One key**: everything after `#k=` is the entire credential — no usernames or passwords. The key lives in `.kimi-remote.json` on the computer and in the browser's localStorage on the phone — be careful on shared phones.
-- **Key leaked?** Delete `.kimi-remote.json` on the computer and restart: the key rotates immediately and all old URLs are void.
-- The program listens on loopback (127.0.0.1) only; nothing is reachable from the LAN, and the encrypted tunnel is the single entry point.
+- **端到端加密**：AES-256-GCM，手机和电脑之间的中继（Cloudflare 隧道）只搬运密文，能看到的只有连接时间和流量大小。
+- **一把钥匙**：`#k=` 后的钥匙即全部凭证，没有用户名和密码。钥匙存在电脑上的 `.kimi-remote.json`，手机上存浏览器 localStorage——共用手机时注意。
+- **钥匙泄露了**：删掉电脑上的 `.kimi-remote.json` 重启程序，钥匙立即更换，旧地址全部作废。
+- 程序只监听本机回环（127.0.0.1），局域网无法直连，对外只有加密隧道一个入口。
 
-The full security model, API allowlist, and implementation details are in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) (Chinese).
+完整的安全模型、API 白名单和实现细节见[开发者文档](docs/DEVELOPMENT.md)。
 
-## Developers
+## 开发者
 
-Architecture, full security model, all commands, acceptance scripts, and directory layout: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) (Chinese).
+架构、完整安全模型、全部命令、验收脚本与目录结构：[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)。
 
-## License
+## 许可证
 
 [MIT](LICENSE)

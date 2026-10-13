@@ -1,6 +1,6 @@
 # 开发者文档
 
-面向源码开发与本地验收。使用者文档见 [README](../README.zh-CN.md)（[English](../README.md)）。
+面向源码开发与本地验收。使用者文档见 [README](../README.md)（[English](../README.en.md)）。
 
 ## 架构（文字版）
 
